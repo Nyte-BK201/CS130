@@ -191,6 +191,17 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  
+  /* check if thread sleep enough */
+  while(!list_empty(&alarm_list)){
+    struct thread *head = list_entry(list_front(&alarm_list),struct thread, alarm_elem);
+    /* head is still sleeping */
+    if(head->wake_up_time > ticks){
+      break;
+    }
+    thread_unblock(head);
+    list_pop_front(&alarm_list); 
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
