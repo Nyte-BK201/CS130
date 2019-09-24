@@ -107,7 +107,7 @@ timer_sleep (int64_t ticks)
 
   /* add current thread to list and block it;
     thread_block() will incur schedule() */
-  struct thread *cur = running_thread ();
+  struct thread *cur = running_thread();
   cur->wake_up_time=ticks+start;
   list_insert_ordered(&alarm_list,&cur->alarm_elem,alarm_less_func,NULL);
   
