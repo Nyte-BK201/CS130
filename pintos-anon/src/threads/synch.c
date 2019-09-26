@@ -300,10 +300,6 @@ lock_release (struct lock *lock)
     cur->stored_index-=(co+1);
     cur->priority = cur->stored_priority[cur->stored_index];
     cur->priority_lock_master = cur->stored_lock_master[cur->stored_index];
-
-    /* re add to ready list */
-    list_remove(&cur->elem);
-    list_insert_ordered(&ready_list, &cur->elem, thread_priority_large_func, NULL);
   }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
