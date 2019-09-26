@@ -203,10 +203,28 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  enum intr_level old_level= intr_disable ();
+  struct thread *cur = thread_current ();
+  unsigned int sema_value = (lock->semaphore).value;
+  while(lock->holder != NULL){
+    /* donate the priority to lock holder */
+    lock->holder->stored_priority[lock->holder->stored_index++]=lock->holder->priority;
+      /* remove lock holder from ready list */
+    list_remove(&lock->holder->elem);
+    lock->holder->priority=cur->priority;
+      /* add again to ready list to adjust its priority */
+    list_insert_ordered(&ready_list,&lock->holder->elem,thread_priority_large_func,NULL);
+  
+    /* add current thread to lock's wait list */
+    list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
 
-
-  sema_down (&lock->semaphore);
+    thread_block();
+    /* in this block, scheduler should run the lock holder */
+  }
+  sema_value--;
   lock->holder = thread_current ();
+
+  intr_set_level (old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -239,9 +257,26 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+  enum intr_level old_level = intr_disable ();
 
+  struct thread *cur = thread_current ();
   lock->holder = NULL;
+  /* unblock the highest priority thread 
+    and give out the current priority if there are stored priority */
+  if(cur->stored_index != 0){
+    cur->stored_index--;
+    cur->priority = cur->stored_priority[cur->stored_index];
+
+    /* re add to ready list */
+    list_remove(&cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, thread_priority_large_func, NULL);
+  }
   sema_up (&lock->semaphore);
+
+  intr_set_level (old_level);
+
+  /* give up cpu to let scheduler decide next */
+  thread_yield();
 }
 
 /* Returns true if the current thread holds LOCK, false

@@ -20,10 +20,6 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
-/* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
-static struct list ready_list;
-
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -339,8 +335,15 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  struct thread *cur = thread_current ();
 
+  /* if current priority gets from donation, we should not change it */
+  if(cur->stored_index != 0){
+    cur->stored_priority[0] = new_priority;
+  }else{
+    cur->priority=new_priority;
+  }
+  
   thread_yield();  
 }
 
@@ -469,6 +472,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->stored_priority = 0;
 
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, thread_priority_large_func, NULL);

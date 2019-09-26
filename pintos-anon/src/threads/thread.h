@@ -90,6 +90,10 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    /* Priority donated by other threads; At most 8 level donates */
+    int stored_priority[9];
+    int stored_index;
+
     /* Record the alarm pos and wake-up time */
     int64_t wake_up_time;
     struct list_elem alarm_elem;
@@ -141,6 +145,10 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+/* List of processes in THREAD_READY state, that is, processes
+   that are ready to run but not actually running. */
+static struct list ready_list;
 
 /* return true if a's priority > b's */
 static bool thread_priority_large_func (const struct list_elem *a, const struct list_elem *b, void *aux){
