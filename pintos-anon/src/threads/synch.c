@@ -208,9 +208,9 @@ lock_acquire (struct lock *lock)
   enum intr_level old_level= intr_disable ();
   struct thread *cur = thread_current ();
 
-  struct semaphore sema = lock->semaphore;
+  struct semaphore *sema = &lock->semaphore;
   bool is_donated = false;
-  while (lock->holder != NULL){
+  while (sema->value == 0){
     /* donate the priority to lock holder but only once */
     if(!is_donated){
       is_donated = true;
@@ -233,7 +233,7 @@ lock_acquire (struct lock *lock)
     /* in this block, scheduler should run the lock holder */
   }  
   // sema_down(&lock->semaphore);
-  sema.value--;
+  sema->value--;
   lock->holder = thread_current ();
 
   intr_set_level (old_level);
@@ -333,10 +333,10 @@ struct semaphore_elem
   };
 
 bool waiter_thread_priority_large_func(const struct list_elem *a, const struct list_elem *b, void *aux){
-  struct semaphore sa = list_entry (a, struct semaphore_elem, elem)->semaphore;
-  struct semaphore sb = list_entry (b, struct semaphore_elem, elem)->semaphore;
-  struct thread *ta = list_entry(list_front(&sa.waiters), struct thread, elem);
-  struct thread *tb = list_entry(list_front(&sb.waiters), struct thread, elem);
+  struct semaphore *sa = &list_entry (a, struct semaphore_elem, elem)->semaphore;
+  struct semaphore *sb = &list_entry (b, struct semaphore_elem, elem)->semaphore;
+  struct thread *ta = list_entry(list_front(&sa->waiters), struct thread, elem);
+  struct thread *tb = list_entry(list_front(&sb->waiters), struct thread, elem);
   return ta->priority > tb->priority;
 }
 
