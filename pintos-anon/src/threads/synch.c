@@ -208,7 +208,7 @@ lock_acquire (struct lock *lock)
   enum intr_level old_level= intr_disable ();
   struct thread *cur = thread_current ();
 
-  unsigned int sema_value = (lock->semaphore).value;
+  struct semaphore sema = lock->semaphore;
   bool is_donated = false;
   while (lock->holder != NULL){
     /* donate the priority to lock holder but only once */
@@ -233,7 +233,7 @@ lock_acquire (struct lock *lock)
     /* in this block, scheduler should run the lock holder */
   }  
   // sema_down(&lock->semaphore);
-  sema_value--;
+  sema.value--;
   lock->holder = thread_current ();
 
   intr_set_level (old_level);
