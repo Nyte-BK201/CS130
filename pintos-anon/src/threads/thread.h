@@ -90,8 +90,10 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
-    /* Priority donated by other threads; At most 8 level donates */
-    int stored_priority[9];
+    /* Priority donated by other threads; At most 10 level donates;
+      we also save the donation's belonging lock */
+    int stored_priority[11];
+    struct lock *stored_lock_master[11];
     int stored_index;
 
     /* Record the alarm pos and wake-up time */

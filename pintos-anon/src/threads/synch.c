@@ -207,23 +207,24 @@ lock_acquire (struct lock *lock)
   struct thread *cur = thread_current ();
 
   unsigned int sema_value = (lock->semaphore).value;
-  while (lock->holder != NULL && cur->priority > lock->holder->priority){
+  while (lock->holder != NULL){
     /* donate the priority to lock holder */
-    lock->holder->stored_priority[lock->holder->stored_index++] = lock->holder->priority;
+    lock->holder->stored_priority[lock->holder->stored_index] = lock->holder->priority;
+    lock->holder->stored_lock_master[lock->holder->stored_index++] = lock;
       /* remove lock holder from ready list */
-    // list_remove(&lock->holder->elem);
+    list_remove(&lock->holder->elem);
     lock->holder->priority = cur->priority;
-    //   /* add again to ready list to adjust its priority */
-    // list_insert_ordered(&ready_list,&lock->holder->elem,thread_priority_large_func,NULL);
+      /* add again to ready list to adjust its priority */
+    list_insert_ordered(&ready_list,&lock->holder->elem,thread_priority_large_func,NULL);
   
     /* add current thread to lock's wait list */
-    // list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
+    list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
 
-    // thread_block();
+    thread_block();
     /* in this block, scheduler should run the lock holder */
   }  
-  sema_down(&lock->semaphore);
-  // sema_value--;
+  // sema_down(&lock->semaphore);
+  sema_value--;
   lock->holder = thread_current ();
 
   intr_set_level (old_level);
@@ -262,17 +263,39 @@ lock_release (struct lock *lock)
   enum intr_level old_level = intr_disable ();
 
   struct thread *cur = thread_current ();
-  lock->holder = NULL;
   /* unblock the highest priority thread 
-    and give out the current priority if there are stored priority */
+    and give out all the priority get from this lock(include current) */
   if(cur->stored_index != 0){
-    cur->stored_index--;
+    int co = 0;
+    for(int i=0;i<cur->stored_index;i++){
+      if(cur->stored_lock_master[i]==lock){
+        cur->stored_lock_master[i]=NULL;
+        cur->stored_priority[i]=-1;
+        co++;
+      }
+    }
+    /* resize the array */
+    for(int i=0;i<cur->stored_index;i++){
+      if(cur->stored_priority[i]==-1){
+        for(int j=i+1;j<cur->stored_index;j++){
+          if(cur->stored_priority[j]==-1)continue;
+          cur->stored_lock_master[i]=cur->stored_lock_master[j];
+          cur->stored_priority[i]=cur->stored_priority[j];
+          cur->stored_lock_master[j]=NULL;
+          cur->stored_priority[j]=-1;
+          break;
+        }
+      }
+    }
+
+    cur->stored_index-=(co+1);
     cur->priority = cur->stored_priority[cur->stored_index];
 
     /* re add to ready list */
-    // list_remove(&cur->elem);
-    // list_insert_ordered(&ready_list, &cur->elem, thread_priority_large_func, NULL);
+    list_remove(&cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, thread_priority_large_func, NULL);
   }
+  lock->holder = NULL;
   sema_up (&lock->semaphore);
 
   intr_set_level (old_level);
