@@ -142,4 +142,11 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* return true if a's priority > b's */
+static bool thread_priority_large_func (const struct list_elem *a, const struct list_elem *b, void *aux){
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+  return thread_a->priority>thread_b->priority;
+}
+
 #endif /* threads/thread.h */
