@@ -343,7 +343,7 @@ thread_set_priority (int new_priority)
   }else{
     cur->priority=new_priority;
   }
-  
+
   thread_yield();  
 }
 
@@ -472,7 +472,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->stored_priority = 0;
+  t->stored_index = 0;
 
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, thread_priority_large_func, NULL);
