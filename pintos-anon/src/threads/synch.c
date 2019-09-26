@@ -205,23 +205,25 @@ lock_acquire (struct lock *lock)
 
   enum intr_level old_level= intr_disable ();
   struct thread *cur = thread_current ();
+
   unsigned int sema_value = (lock->semaphore).value;
-  while(lock->holder != NULL){
+  while (lock->holder != NULL && cur->priority > lock->holder->priority){
     /* donate the priority to lock holder */
-    lock->holder->stored_priority[lock->holder->stored_index++]=lock->holder->priority;
+    lock->holder->stored_priority[lock->holder->stored_index++] = lock->holder->priority;
       /* remove lock holder from ready list */
-    list_remove(&lock->holder->elem);
-    lock->holder->priority=cur->priority;
-      /* add again to ready list to adjust its priority */
-    list_insert_ordered(&ready_list,&lock->holder->elem,thread_priority_large_func,NULL);
+    // list_remove(&lock->holder->elem);
+    lock->holder->priority = cur->priority;
+    //   /* add again to ready list to adjust its priority */
+    // list_insert_ordered(&ready_list,&lock->holder->elem,thread_priority_large_func,NULL);
   
     /* add current thread to lock's wait list */
-    list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
+    // list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
 
-    thread_block();
+    // thread_block();
     /* in this block, scheduler should run the lock holder */
-  }
-  sema_value--;
+  }  
+  sema_down(&lock->semaphore);
+  // sema_value--;
   lock->holder = thread_current ();
 
   intr_set_level (old_level);
@@ -268,8 +270,8 @@ lock_release (struct lock *lock)
     cur->priority = cur->stored_priority[cur->stored_index];
 
     /* re add to ready list */
-    list_remove(&cur->elem);
-    list_insert_ordered(&ready_list, &cur->elem, thread_priority_large_func, NULL);
+    // list_remove(&cur->elem);
+    // list_insert_ordered(&ready_list, &cur->elem, thread_priority_large_func, NULL);
   }
   sema_up (&lock->semaphore);
 
