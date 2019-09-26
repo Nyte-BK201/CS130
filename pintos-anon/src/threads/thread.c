@@ -24,6 +24,10 @@
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* List of processes in THREAD_READY state, that is, processes
+   that are ready to run but not actually running. */
+struct list ready_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 

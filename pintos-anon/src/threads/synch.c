@@ -32,6 +32,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+extern struct list ready_list;
+
 bool sema_priority_ (const struct list_elem *a, const struct list_elem *b, void *aux){
   struct thread *thread_a = list_entry(a, struct thread, elem);
   struct thread *thread_b = list_entry(b, struct thread, elem);
