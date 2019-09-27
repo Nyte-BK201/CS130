@@ -211,7 +211,12 @@ lock_acquire (struct lock *lock)
 
   struct semaphore *sema = &lock->semaphore;
 
+  /* Loop for nested donation;
+    We can conclude that in no circumstances a lower priority thread can run before higher 
+    so that when nested donation happens, we always ensure the lowest get the highest donation */
   while (sema->value == 0){
+    /* equal priority is not needed to donate;
+      Ensure when a medium thread get donation and wake up, it donate to the lower thread */
     if(lock->holder->priority < cur->priority){
       lock->holder->stored_priority[lock->holder->stored_index] = lock->holder->priority;
       lock->holder->stored_lock_master[lock->holder->stored_index++] = lock->holder->priority_lock_master;
@@ -219,8 +224,9 @@ lock_acquire (struct lock *lock)
       lock->holder->priority = cur->priority;
       lock->holder->priority_lock_master = lock;
 
-        /* remove lock holder from ready list */
-        /* add again to ready list to adjust its priority */
+        /* remove lock holder from ready list 
+          and add again to ready list to adjust its priority;
+          A little faster than list_sort */
       list_remove(&lock->holder->elem);
       list_insert_ordered(&ready_list,&lock->holder->elem,thread_priority_large_func,NULL);
     }
@@ -228,9 +234,11 @@ lock_acquire (struct lock *lock)
     list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
     
     thread_block();
-    /* after this block, scheduler should run the lock holder */
-  }  
-  // sema_down(&lock->semaphore);
+    /* after this block, scheduler should run the lock holder;
+      if nested donation happens, the thread will loop to donate the lower one*/
+  }
+  /* sema_down will add the thread to the wait list;
+     we have to manully decrease it here */
   sema->value--;
   lock->holder = thread_current ();
 
@@ -273,6 +281,7 @@ lock_release (struct lock *lock)
   /* unblock the highest priority thread 
     and give out all the priority get from this lock(include current) */
   if(cur->stored_index != 0){
+    /* first check every priority donation and remove this lock's */
     int co = 0;
     for(int i=0;i<cur->stored_index;i++){
       if(cur->stored_lock_master[i]==lock){
@@ -281,7 +290,7 @@ lock_release (struct lock *lock)
         co++;
       }
     }
-    /* resize the array */
+    /* resize the array since some donations are removed */
     if(co!=0){
       for(int i=0;i<cur->stored_index;i++){
         if(cur->stored_priority[i]==-1){
@@ -298,8 +307,9 @@ lock_release (struct lock *lock)
       cur->stored_index-=co;
     }
     
-    /* remove the holding priority */
-    if(cur->priority_lock_master==lock){
+    /* remove the holding priority if it comes from this lock;
+      get the second highest priority from stored_priority */
+    if(cur->priority_lock_master == lock){
       cur->stored_index--;
       cur->priority = cur->stored_priority[cur->stored_index];
       cur->priority_lock_master = cur->stored_lock_master[cur->stored_index];
@@ -310,7 +320,6 @@ lock_release (struct lock *lock)
   sema_up (&lock->semaphore);
 
   intr_set_level (old_level);
-
   /* give up cpu to let scheduler decide next */
   thread_yield();
 }
@@ -333,6 +342,11 @@ struct semaphore_elem
     struct semaphore semaphore;         /* This semaphore. */
   };
 
+/* Here the function is funky, it should not be used to list_insert_ordered
+  since list elements to inserted is not in waiters list;
+    I am not sure if it runs faster with insertion so I decide to use list_sort
+  so that this function will be elegant;
+    If using insertion: thread *ta = thread_current(); */
 bool cond_thread_priority_large_func(const struct list_elem *a, const struct list_elem *b, void *aux){
   struct semaphore *sa = &list_entry (a, struct semaphore_elem, elem)->semaphore;
   struct semaphore *sb = &list_entry (b, struct semaphore_elem, elem)->semaphore;

@@ -204,6 +204,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
     list_pop_front(&alarm_list); 
   }
 
+  /* advance scheduler part */
   if(thread_mlfqs){
     thread_ins_recent_cpu();
     if(ticks % TIMER_FREQ == 0){
