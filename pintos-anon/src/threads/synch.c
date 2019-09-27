@@ -284,22 +284,29 @@ lock_release (struct lock *lock)
       }
     }
     /* resize the array */
-    for(int i=0;i<cur->stored_index;i++){
-      if(cur->stored_priority[i]==-1){
-        for(int j=i+1;j<cur->stored_index;j++){
-          if(cur->stored_priority[j]==-1)continue;
-          cur->stored_lock_master[i]=cur->stored_lock_master[j];
-          cur->stored_priority[i]=cur->stored_priority[j];
-          cur->stored_lock_master[j]=NULL;
-          cur->stored_priority[j]=-1;
-          break;
+    if(co!=0){
+      for(int i=0;i<cur->stored_index;i++){
+        if(cur->stored_priority[i]==-1){
+          for(int j=i+1;j<cur->stored_index;j++){
+            if(cur->stored_priority[j]==-1)continue;
+            cur->stored_lock_master[i]=cur->stored_lock_master[j];
+            cur->stored_priority[i]=cur->stored_priority[j];
+            cur->stored_lock_master[j]=NULL;
+            cur->stored_priority[j]=-1;
+            break;
+          }
         }
       }
+      cur->stored_index-=co;
     }
-
-    cur->stored_index-=(co+1);
-    cur->priority = cur->stored_priority[cur->stored_index];
-    cur->priority_lock_master = cur->stored_lock_master[cur->stored_index];
+    
+    /* remove the holding priority */
+    if(cur->priority_lock_master==lock){
+      cur->stored_index--;
+      cur->priority = cur->stored_priority[cur->stored_index];
+      cur->priority_lock_master = cur->stored_lock_master[cur->stored_index];
+    }
+    
   }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
