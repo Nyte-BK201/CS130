@@ -209,11 +209,9 @@ lock_acquire (struct lock *lock)
   struct thread *cur = thread_current ();
 
   struct semaphore *sema = &lock->semaphore;
-  bool is_donated = false;
+
   while (sema->value == 0){
-    /* donate the priority to lock holder but only once */
-    if(!is_donated){
-      is_donated = true;
+    if(lock->holder->priority < cur->priority){
       lock->holder->stored_priority[lock->holder->stored_index] = lock->holder->priority;
       lock->holder->stored_lock_master[lock->holder->stored_index++] = lock->holder->priority_lock_master;
 
@@ -224,13 +222,12 @@ lock_acquire (struct lock *lock)
         /* add again to ready list to adjust its priority */
       list_remove(&lock->holder->elem);
       list_insert_ordered(&ready_list,&lock->holder->elem,thread_priority_large_func,NULL);
-    
-      /* add current thread to lock's wait list */
-      list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
     }
+      /* add current thread to lock's wait list */
+    list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
     
     thread_block();
-    /* in this block, scheduler should run the lock holder */
+    /* after this block, scheduler should run the lock holder */
   }  
   // sema_down(&lock->semaphore);
   sema->value--;
