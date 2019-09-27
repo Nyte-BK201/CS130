@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/fixed-point.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -87,23 +88,27 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
-    struct lock *priority_lock_master;   /* Pair to this priority */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+/* =============================== project 1 =============================== */
+    /* Record the alarm pos and wake-up time */
+    int64_t wake_up_time;
+    struct list_elem alarm_elem;
+
+    int priority;                        /* Current Priority. */
+    struct lock *priority_lock_master;   /* Pair Lock to this priority; NULL if it is default */
     /* Priority donated by other threads;
       we also save the donation's belonging lock */
     int stored_priority[30];
     struct lock *stored_lock_master[30];
     int stored_index;
 
-    /* Record the alarm pos and wake-up time */
-    int64_t wake_up_time;
-    struct list_elem alarm_elem;
-
-    /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
-
+    /* nice and recent_cpu */
+    int nice;
+    fixed_point recent_cpu;
+    
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -144,10 +149,17 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+void thread_update_priority_with_nice (struct thread *t);
+void thread_update_priority_with_nice_all(void);
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void update_load_avg(void);
+void thread_ins_recent_cpu(void);
+void thread_update_recent_cpu(struct thread *t);
+void thread_update_recent_cpu_all(void);
 
 /* return true if a's priority > b's */
 static bool thread_priority_large_func (const struct list_elem *a, const struct list_elem *b, void *aux){

@@ -37,6 +37,9 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+/* load average to advance scheduler */
+static fixed_point load_avg;
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -92,6 +95,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  load_avg = INT_TO_FP(0);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -339,6 +343,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  if(thread_mlfqs) return;
   struct thread *cur = thread_current ();
 
   /* if current priority gets from donation, we should not change it */
@@ -358,35 +363,93 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
+void
+thread_update_priority_with_nice (struct thread *t){
+  ASSERT(thread_mlfqs);
+  if(t == idle_thread) return;
+    /* some subs here can be denoted with Macro but I don't */
+  t->priority = PRI_MAX - FP_TO_INT_TRUNC( FP_DIV_INT(t->recent_cpu,4) ) - (t->nice*2) ;
+  t->priority = t->priority > PRI_MAX ? PRI_MAX : t->priority;
+  t->priority = t->priority < PRI_MIN ? PRI_MIN : t->priority;
+}
+
+void thread_update_priority_with_nice_all(void){
+  ASSERT(thread_mlfqs);
+  thread_foreach(thread_update_priority_with_nice,NULL);
+}
+
+void
+thread_update_recent_cpu(struct thread *t){
+  ASSERT(thread_mlfqs);
+  if(t == idle_thread) return;
+  fixed_point a = FP_MUL_INT(load_avg,2);
+  fixed_point b = FP_DIV_FP(a,FP_ADD_INT(a,1));
+
+  t->recent_cpu = FP_ADD_INT(FP_MUL_FP(b,t->recent_cpu),t->nice);
+}
+
+void
+thread_update_recent_cpu_all(){
+  ASSERT(thread_mlfqs);
+  thread_foreach(thread_update_recent_cpu,NULL);
+}
+
+void
+update_load_avg(){
+  ASSERT(thread_mlfqs);
+
+  int co = list_size(&ready_list);
+  if(thread_current()!=idle_thread) co++;
+  fixed_point a = FP_MUL_FP(FP_DIV_INT(INT_TO_FP(59), 60),load_avg);
+  fixed_point b = FP_MUL_INT(FP_DIV_INT(INT_TO_FP(1), 60),co);
+  load_avg = FP_ADD_FP(a,b);
+}
+
+void
+thread_ins_recent_cpu(){
+  ASSERT(thread_mlfqs);
+  if(thread_current() != idle_thread)
+    thread_current()->recent_cpu = FP_ADD_INT(thread_current ()->recent_cpu,1);
+}
+
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice) 
 {
-  /* Not yet implemented. */
+  ASSERT(thread_mlfqs);
+
+  struct thread *cur = thread_current ();
+  cur->nice = nice;
+  thread_update_priority_with_nice(cur);
+  /* yield if the priority is not highest */
+  if(!list_empty(&ready_list) && 
+    list_entry(list_front(&ready_list),struct thread,elem)->priority > cur->priority){
+      thread_yield();
+  }
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  ASSERT(thread_mlfqs);
+  return thread_current ()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  ASSERT(thread_mlfqs);
+  return FP_TO_INT_ROUND( FP_MUL_INT( load_avg , 100 ) );
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  ASSERT(thread_mlfqs);
+  return FP_TO_INT_ROUND( FP_MUL_INT( thread_current ()->recent_cpu , 100 ) );
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -474,11 +537,18 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
+
+  /* ============================ project 1 =============================*/
   t->priority = priority;
   t->priority_lock_master=NULL;
-  t->magic = THREAD_MAGIC;
   t->stored_index = 0;
 
+  if(thread_mlfqs){
+    t->nice = 0;
+    t->recent_cpu = INT_TO_FP(0);
+  }
+
+  t->magic = THREAD_MAGIC;
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, thread_priority_large_func, NULL);
   intr_set_level (old_level);
