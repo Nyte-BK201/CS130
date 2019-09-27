@@ -91,10 +91,10 @@ struct thread
     struct lock *priority_lock_master;   /* Pair to this priority */
     struct list_elem allelem;           /* List element for all threads list. */
 
-    /* Priority donated by other threads; At most 10 level donates;
+    /* Priority donated by other threads;
       we also save the donation's belonging lock */
-    int stored_priority[11];
-    struct lock *stored_lock_master[11];
+    int stored_priority[30];
+    struct lock *stored_lock_master[30];
     int stored_index;
 
     /* Record the alarm pos and wake-up time */
