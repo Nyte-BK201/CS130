@@ -245,7 +245,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered (&ready_list, &t->elem, thread_priority_large_func, NULL);
+  list_insert_ordered (&ready_list, &t->elem, 
+                      thread_priority_large_func, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -316,7 +317,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, thread_priority_large_func, NULL);
+    list_insert_ordered (&ready_list, &cur->elem, 
+                        thread_priority_large_func, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -363,12 +365,16 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
+/* update priority according to nice */
 void
-thread_update_priority_with_nice (struct thread *t){
+thread_update_priority_with_nice (struct thread *t)
+{
   ASSERT(thread_mlfqs);
   if(t == idle_thread) return;
     /* some subs here can be denoted with Macro but I don't */
-  t->priority = PRI_MAX - FP_TO_INT_TRUNC( FP_DIV_INT(t->recent_cpu,4) ) - (t->nice*2) ;
+  t->priority = PRI_MAX - 
+                FP_TO_INT_TRUNC( FP_DIV_INT(t->recent_cpu,4) ) - 
+                (t->nice*2) ;
   t->priority = t->priority > PRI_MAX ? PRI_MAX : t->priority;
   t->priority = t->priority < PRI_MIN ? PRI_MIN : t->priority;
 }
@@ -378,8 +384,10 @@ void thread_update_priority_with_nice_all(void){
   thread_foreach(thread_update_priority_with_nice,NULL);
 }
 
+/* update recent cpu once */
 void
-thread_update_recent_cpu(struct thread *t){
+thread_update_recent_cpu(struct thread *t)
+{
   ASSERT(thread_mlfqs);
   if(t == idle_thread) return;
   fixed_point a = FP_MUL_INT(load_avg,2);
@@ -388,14 +396,18 @@ thread_update_recent_cpu(struct thread *t){
   t->recent_cpu = FP_ADD_INT(FP_MUL_FP(b,t->recent_cpu),t->nice);
 }
 
+/* update recent cpu when timer interrupt triggers */
 void
-thread_update_recent_cpu_all(){
+thread_update_recent_cpu_all()
+{
   ASSERT(thread_mlfqs);
   thread_foreach(thread_update_recent_cpu,NULL);
 }
 
+/* update load_avg when timer interrupt triggers */
 void
-update_load_avg(){
+update_load_avg()
+{
   ASSERT(thread_mlfqs);
 
   int co = list_size(&ready_list);
@@ -405,8 +417,10 @@ update_load_avg(){
   load_avg = FP_ADD_FP(a,b);
 }
 
+/* increase cur thread recent cpu when timer interrupt triggers */
 void
-thread_ins_recent_cpu(){
+thread_ins_recent_cpu()
+{
   ASSERT(thread_mlfqs);
   if(thread_current() != idle_thread)
     thread_current()->recent_cpu = FP_ADD_INT(thread_current ()->recent_cpu,1);
@@ -423,7 +437,8 @@ thread_set_nice (int nice)
   thread_update_priority_with_nice(cur);
   /* yield if the priority is not highest */
   if(!list_empty(&ready_list) && 
-    list_entry(list_front(&ready_list),struct thread,elem)->priority > cur->priority){
+    list_entry(list_front(&ready_list),
+              struct thread,elem)->priority > cur->priority){
       thread_yield();
   }
 }
@@ -550,7 +565,8 @@ init_thread (struct thread *t, const char *name, int priority)
 
   t->magic = THREAD_MAGIC;
   old_level = intr_disable ();
-  list_insert_ordered (&all_list, &t->allelem, thread_priority_large_func, NULL);
+  list_insert_ordered (&all_list, &t->allelem, 
+                      thread_priority_large_func, NULL);
   intr_set_level (old_level);
 }
 
@@ -620,7 +636,7 @@ thread_schedule_tail (struct thread *prev)
      pull out the rug under itself.  (We don't free
      initial_thread because its memory was not obtained via
      palloc().) */
-  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
+  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread)
     {
       ASSERT (prev != cur);
       palloc_free_page (prev);

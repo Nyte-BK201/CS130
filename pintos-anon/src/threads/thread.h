@@ -149,7 +149,7 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
-/* ====================== Project 1 Advanced scheduler ================================= */
+/* ====== Project 1 Advanced scheduler ============ */
 void thread_update_priority_with_nice (struct thread *t);
 void thread_update_priority_with_nice_all(void);
 int thread_get_nice (void);
@@ -161,10 +161,12 @@ void update_load_avg(void);
 void thread_ins_recent_cpu(void);
 void thread_update_recent_cpu(struct thread *t);
 void thread_update_recent_cpu_all(void);
-/* ====================== Project 1 Advanced scheduler ================================= */
+/* ====== Project 1 Advanced scheduler ============ */
 
 /* return true if thread a's priority > thread b's */
-static bool thread_priority_large_func (const struct list_elem *a, const struct list_elem *b, void *aux){
+static bool thread_priority_large_func (const struct list_elem *a, 
+  const struct list_elem *b, void *aux)
+{
   struct thread *thread_a = list_entry(a, struct thread, elem);
   struct thread *thread_b = list_entry(b, struct thread, elem);
   return thread_a->priority>thread_b->priority;

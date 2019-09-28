@@ -34,12 +34,6 @@
 
 extern struct list ready_list;
 
-bool sema_priority_ (const struct list_elem *a, const struct list_elem *b, void *aux){
-  struct thread *thread_a = list_entry(a, struct thread, elem);
-  struct thread *thread_b = list_entry(b, struct thread, elem);
-  return thread_a->priority>thread_b->priority;
-}
-
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -76,7 +70,8 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_insert_ordered(&sema->waiters,&thread_current ()->elem,thread_priority_large_func,NULL);
+      list_insert_ordered(&sema->waiters,&thread_current ()->elem,
+        thread_priority_large_func,NULL);
       thread_block ();
     }
   sema->value--;
@@ -122,7 +117,8 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)){
-    thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
+    thread_unblock (list_entry
+      (list_pop_front (&sema->waiters), struct thread, elem));
   } 
     
   sema->value++;
@@ -212,14 +208,18 @@ lock_acquire (struct lock *lock)
   struct semaphore *sema = &lock->semaphore;
 
   /* Loop for nested donation;
-    We can conclude that in no circumstances a lower priority thread can run before higher 
-    so that when nested donation happens, we always ensure the lowest get the highest donation */
+    We can conclude that in no circumstances a lower priority 
+    thread can run before higher so that when nested donation 
+    happens, we always ensure the lowest get the highest donation */
   while (sema->value == 0){
     /* equal priority is not needed to donate;
-      Ensure when a medium thread get donation and wake up, it donate to the lower thread */
+      Ensure when a medium thread get donation and wake up, 
+      it donate to the lower thread */
     if(lock->holder->priority < cur->priority){
-      lock->holder->stored_priority[lock->holder->stored_index] = lock->holder->priority;
-      lock->holder->stored_lock_master[lock->holder->stored_index++] = lock->holder->priority_lock_master;
+      lock->holder->stored_priority[lock->holder->stored_index] =
+         lock->holder->priority;
+      lock->holder->stored_lock_master[lock->holder->stored_index++] = 
+        lock->holder->priority_lock_master;
 
       lock->holder->priority = cur->priority;
       lock->holder->priority_lock_master = lock;
@@ -228,14 +228,17 @@ lock_acquire (struct lock *lock)
           and add again to ready list to adjust its priority;
           A little faster than list_sort */
       list_remove(&lock->holder->elem);
-      list_insert_ordered(&ready_list,&lock->holder->elem,thread_priority_large_func,NULL);
+      list_insert_ordered(&ready_list,&lock->holder->elem,
+        thread_priority_large_func,NULL);
     }
       /* add current thread to lock's wait list */
-    list_insert_ordered(&lock->semaphore.waiters,&cur->elem,thread_priority_large_func,NULL);
+    list_insert_ordered(&lock->semaphore.waiters,&cur->elem,
+      thread_priority_large_func,NULL);
     
     thread_block();
     /* after this block, scheduler should run the lock holder;
-      if nested donation happens, the thread will loop to donate the lower one*/
+      if nested donation happens, the thread will loop to 
+      donate the lower one*/
   }
   /* sema_down will add the thread to the wait list;
      we have to manully decrease it here */
@@ -344,14 +347,20 @@ struct semaphore_elem
 
 /* Here the function is funky, it should not be used to list_insert_ordered
   since list elements to inserted is not in waiters list;
-    I am not sure if it runs faster with insertion so I decide to use list_sort
+  I am not sure if it runs faster with insertion so I decide to use list_sort
   so that this function will be elegant;
     If using insertion: thread *ta = thread_current(); */
-bool cond_thread_priority_large_func(const struct list_elem *a, const struct list_elem *b, void *aux){
-  struct semaphore *sa = &list_entry (a, struct semaphore_elem, elem)->semaphore;
-  struct semaphore *sb = &list_entry (b, struct semaphore_elem, elem)->semaphore;
-  struct thread *ta = list_entry(list_front(&sa->waiters), struct thread, elem);
-  struct thread *tb = list_entry(list_front(&sb->waiters), struct thread, elem);
+bool cond_thread_priority_large_func(const struct list_elem *a, 
+  const struct list_elem *b, void *aux)
+{
+  struct semaphore *sa = &list_entry (a, struct semaphore_elem,
+                                      elem)->semaphore;
+  struct semaphore *sb = &list_entry (b, struct semaphore_elem, 
+                                      elem)->semaphore;
+  struct thread *ta = list_entry(list_front(&sa->waiters), 
+                                struct thread, elem);
+  struct thread *tb = list_entry(list_front(&sb->waiters),
+                                struct thread, elem);
   return ta->priority > tb->priority;
 }
 
@@ -421,7 +430,8 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters)){
     list_sort(&cond->waiters,cond_thread_priority_large_func,NULL);
-    sema_up (&list_entry (list_pop_front (&cond->waiters),struct semaphore_elem, elem)->semaphore);
+    sema_up (&list_entry (list_pop_front (&cond->waiters),
+      struct semaphore_elem, elem)->semaphore);
   }
 }
 
