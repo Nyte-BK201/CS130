@@ -28,7 +28,7 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-Struct thread:
+thread.h:
 /* Record the alarm pos and wake-up time */
     int64_t wake_up_time;
     struct list_elem alarm_elem;
@@ -65,20 +65,70 @@ timer.c:
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+thread.h: 
+	int priority;                        /* Current Priority. */
+    struct lock *priority_lock_master;   /* Pair Lock to this priority; NULL if it is default */
+    /* Priority donated by other threads;
+      we also save the donation's belonging lock */
+    int stored_priority[30];
+    struct lock *stored_lock_master[30];
+    int stored_index;
+
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
+
+Whenever H thread donate to L, we set L's priority to H and save previous to
+stored_priority[] and save this donation's lock in pairs. 
+Thus, every priority is bound with a lock(initial priority's lock is NULL).
+
+Once a lock is released, we delete all the priorities got from this lock, 
+and find the right front one in the remaining. Since the right most priority
+pair is ensured to be highest, the algorithm is quite efficient.
+
+Nested case:
+|---| wait L1 		|---|	wait L2     |---|
+|-H-|   -->			|-M-|    -->        |-L-|
+|---|  				|-1-|				|-2-|
+
+Here, L holds Lock2 and M holds Lock1, M donate L a priority and blocked;
+L recive it and pair this priority with L2 (M,L2);
+Now, H wants L1, H donate M, M pair it with L1 (H,L1), M get unblocked,
+Then M checked if L2 is released, if not, donate current priority to holder,
+L then recive and pair (H,L2). 
+H,M is blocked, and H,M,L's priorities are all High.
+
+L release L2, unblock M, and give up pair (H,L2),(M,L2), switch to stored 
+(L,NULL). Now M is (H,L1) higher than L (M,L2), L yields immediately and M runs.
+M release L1, wake up H, give up (H,L1), switech to (M,NULL), yields.
+In this way, we solve this problem neatly.
 
 ---- ALGORITHMS ----
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
+We use list_insert_ordered to ensure a priority queue to sema/lock/cond
+waiter list. Every thread's priority is sure to be the highest in any
+condition, so that waking up the front of the list meets the requirement.
+
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+Check if lock has a holder. If not, gets the lock. Otherwise, loop:
+	If current priority is higher than lock holder, donate it,
+	Add to lock wait list, Block
+Once nested donation happens, the loop keeps thread donating to lock
+holder to make sure holder always get the proper priority to run in priority
+scheduling.
+So the nested donation is handled by recursive donation to lower thread.
+
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+Remove all the priorities got from this lock, Switch to the highest in
+remaining(which is right most one in stored_priority[]).Sema up(which 
+wakes up the highest priority waiter).
 
 ---- SYNCHRONIZATION ----
 
@@ -86,10 +136,39 @@ timer.c:
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+L is running thread_set_priority, and setting a new priority; before
+finshing it, H kicks in and donate H to L for whatever locks and H blocked;
+L is now High Priority but it continues priority set which results in 
+H's donation is lost.
+
+My implementation's thread priority is always the highest. It could be
+original or donated. when setting new priority:
+1. If current priority gets from donation, original is stored in index 0
+	we change the priority stored in stored_priority[0]
+2. If current is original, we change it
+
+A lock does not help because lock itself requires threads have proper priority,
+and the problem could also happens to this function's temporary lock.
+
+I avoid it by disabling interrupt inside this function.
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+The implementation is very neat and clear that we don't need to change
+the property 'priority' which saves a lot works to coordinate the original
+code. The assumption made that priority is always the highest is useful
+in scheduling. And the pair (Priority,Lock) is quite elegant that we do
+not care about 'which thread is waiting for which lock I am holding'.
+
+Other design like implementing a link list when donation happens requires
+a lot editing on original codes and wastes space. The superior is the 
+abstraction that we pair the donation and its lock to make sure a thread
+with a lock waiting by others could always get a enough priority to release
+it and maintain it an array to make sure multiple donation is working.
+Array is quite simple to manipulate, right?
 
 			  ADVANCED SCHEDULER
 			  ==================
@@ -99,6 +178,15 @@ timer.c:
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+thread.h: 
+	/* nice and recent_cpu */
+    int nice;
+    fixed_point recent_cpu;
+thread.c: 
+	/* load average to advance scheduler */
+	static fixed_point load_avg;
+fixed-point.h /* Float Point with integer implementation */
 
 ---- ALGORITHMS ----
 
@@ -110,8 +198,8 @@ timer.c:
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
+ 0		0   0   0      0   0     A
+ 4		4	0	0	0	0   0 	  A
  8
 12
 16

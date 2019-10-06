@@ -346,6 +346,8 @@ void
 thread_set_priority (int new_priority) 
 {
   if(thread_mlfqs) return;
+  enum intr_level old_level=intr_disable ();
+
   struct thread *cur = thread_current ();
 
   /* if current priority gets from donation, we should not change it */
@@ -354,7 +356,8 @@ thread_set_priority (int new_priority)
   }else{
     cur->priority=new_priority;
   }
-
+  
+  intr_set_level (old_level);
   thread_yield();  
 }
 
