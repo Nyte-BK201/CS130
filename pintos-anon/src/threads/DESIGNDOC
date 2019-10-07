@@ -8,7 +8,7 @@
 
 >> Fill in the names and email addresses of your group members.
 Zhongyue Lin    <linzhy@shanghaitech.edu.cn>
-FirstName LastName <email@domain.example>
+Mengying Wu <wumy1@shanghaitech.edu.cn>
 
 ---- PRELIMINARIES ----
 
@@ -30,7 +30,7 @@ FirstName LastName <email@domain.example>
 
 thread.h:
 /* Record the alarm pos and wake-up time */
-    int64_t wake_up_time;
+    int64_t wake_up_time;// the absolute time the thread should wake up
     struct list_elem alarm_elem;
 timer.c:
     /* alarm thread sleeping list */
@@ -39,10 +39,22 @@ timer.c:
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
-
+We init an alarm list at beginning where contains sleeping threads  and be ordered by
+threads' wake up time. When call timer_sleep(), first check if it is a fair time. Next, disable
+interrupt and record the previous interrupt status. Then take out the current thread,
+change its wake_up_time to the absolute time it should wake up, and insert it to the 
+alarm_list according to its wake_up_time. After that, block it and set the interrupt level
+to the previous status.
+The timer interrupt handler mainly check if there is any thread should wake up. While the 
+alarm_list is not empty, everytime check if the first item's wake_up_time is less than current
+time, if yes then unblock it and remove it from alarm_list.
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
-
+We make an alarm_list to record the sleeping threads and sort them by wake_up_time.
+Everytime we only need check the first element in the alarm_list, if its wake_up_time is
+larger than current time, this means no thread in the list need to wake up, otherwise
+we unblock it the check the next one. By this way we can ensure the time waste on 
+those who remain sleeping is up to one thread, acutually just one compare function.
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
