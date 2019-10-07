@@ -214,9 +214,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
       thread_update_recent_cpu_all();
     }
     if(ticks % 4 == 0){
-      thread_update_priority_with_nice_all();
+      thread_update_priority_with_nice(thread_current());
     }
-    thread_yield();
   }
 }
 

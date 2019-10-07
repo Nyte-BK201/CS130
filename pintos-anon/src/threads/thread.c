@@ -413,6 +413,7 @@ thread_update_recent_cpu_all()
 {
   ASSERT(thread_mlfqs);
   thread_foreach(thread_update_recent_cpu,NULL);
+  thread_foreach(thread_update_priority_with_nice,NULL);
 }
 
 /* update load_avg when timer interrupt triggers */

@@ -202,19 +202,32 @@ ticks   A   B   C   A   B   C   to run
  4		4	0	0	62	61  59		A
  8		8	0	0	61	61	59		B
 12		8	4	0	61  60  59		A
-16		12  4   0   60  60  59      
-20
-24
-28
-32
-36
+16		12  4   0   60  60  59      B
+20		12	8	0	60  59  59      A
+24		16  8   0   59  59  59      C
+28		16  8   4   59  59  58      B
+32		16  12  4   59  58  58      A
+36		20  12  4   58  58  58      C
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
 
+Yes. Timer ticks 8,16,24,36 we have multiple highest priority threads
+in the ready list. The scheduler does not have any specification in 
+choosing multiple highest priority threads, so I use "First Come 
+First Serve". A thread is to run if it comes with that priority first
+in the ready list.
+
+Yes.
+
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+A complex scheduling interrupt context will consume more time which 
+can not be  interrupted. This will reduce the concurrency and 
+performance so that I put code inside as less as I could, and keep it 
+functioning in the meantime.
 
 ---- RATIONALE ----
 
@@ -222,6 +235,18 @@ ticks   A   B   C   A   B   C   to run
 >> disadvantages in your design choices.  If you were to have extra
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
+
+The design consumes no extra space considering no advanced scheduler.
+And the code is simple to keep balance its functioning and performance
+inside a interrupt context.
+
+However, there are disadvantages in updating priorities. When recent_cpu
+is only changed in recent running threads, our algorithm calculates every
+threads inside ready list every four ticks can be a huge waste in scheduler
+when we have many threads in ready list.
+
+We could save the running threads in the last four ticks and only
+update their priorities to boost performance.
 
 			   SURVEY QUESTIONS
 			   ================
