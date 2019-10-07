@@ -380,6 +380,14 @@ thread_update_priority_with_nice (struct thread *t)
                 (t->nice*2) ;
   t->priority = t->priority > PRI_MAX ? PRI_MAX : t->priority;
   t->priority = t->priority < PRI_MIN ? PRI_MIN : t->priority;
+
+  /* First in first serve 
+    (the first priority in the ready list is to run next) */
+  if(t->status==THREAD_READY){
+    list_remove(&t->elem);
+    list_insert_ordered (&ready_list,&t->elem,
+                        thread_priority_large_func,NULL);
+  }
 }
 
 void thread_update_priority_with_nice_all(void){

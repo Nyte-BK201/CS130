@@ -216,6 +216,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
     if(ticks % 4 == 0){
       thread_update_priority_with_nice_all();
     }
+    thread_yield();
   }
 }
 
