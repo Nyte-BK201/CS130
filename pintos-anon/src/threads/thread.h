@@ -98,7 +98,8 @@ struct thread
     struct list_elem alarm_elem;
 
     int priority;                        /* Current Priority. */
-    struct lock *priority_lock_master;   /* Pair Lock to this priority; NULL if it is default */
+    /* Pair Lock to this priority; NULL if it is default */
+    struct lock *priority_lock_master;   
     /* Priority donated by other threads;
       we also save the donation's belonging lock */
     int stored_priority[30];
