@@ -215,11 +215,16 @@ ticks   A   B   C   A   B   C   to run
 
 Yes. Timer ticks 8,16,24,36 we have multiple highest priority threads
 in the ready list. The scheduler does not have any specification in 
-choosing multiple highest priority threads, so I use "First Come 
+choosing multiple highest priority threads, so I first try "First Come 
 First Serve". A thread is to run if it comes with that priority first
 in the ready list.
 
-Yes.
+But in practice, after updating all recent_cpu and priorities then sort
+will reduce the time consumption in timer_interrupt handler and have a
+better performance. So we are having a choice between performance and 
+predictable behavior in the situation where I do not use 64 queues. I
+choose a better performance by using list_sort since there is not a 
+particular requirement to ordering.
 
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
@@ -236,17 +241,16 @@ functioning in the meantime.
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
 
-The design consumes no extra space considering no advanced scheduler.
+The design consumes no extra space comparing to no advanced scheduler.
 And the code is simple to keep balance its functioning and performance
 inside a interrupt context.
 
-However, there are disadvantages in updating priorities. When recent_cpu
-is only changed in recent running threads, our algorithm calculates every
-threads inside ready list every four ticks can be a huge waste in scheduler
-when we have many threads in ready list.
+However, there are disadvantages in updating priorities. The ordering
+between multiple highest priority threads is designed by list_sort
+(quick sort) which is uncertain to some extent.
 
-We could save the running threads in the last four ticks and only
-update their priorities to boost performance.
+I would considering using 64 queues so that I can keep both performance
+and ordering since it will not cause too much overhead in memory consumption.
 
 			   SURVEY QUESTIONS
 			   ================

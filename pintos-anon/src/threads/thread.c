@@ -382,12 +382,14 @@ thread_update_priority_with_nice (struct thread *t)
   t->priority = t->priority < PRI_MIN ? PRI_MIN : t->priority;
 
   /* First in first serve 
-    (the first priority in the ready list is to run next) */
+    (the first priority in the ready list is to run next) 
+    perform worse than unpredictable list_sort
   if(t->status==THREAD_READY){
     list_remove(&t->elem);
     list_insert_ordered (&ready_list,&t->elem,
                         thread_priority_large_func,NULL);
   }
+  */
 }
 
 void thread_update_priority_with_nice_all(void){
@@ -413,7 +415,10 @@ thread_update_recent_cpu_all()
 {
   ASSERT(thread_mlfqs);
   thread_foreach(thread_update_recent_cpu,NULL);
-  thread_foreach(thread_update_priority_with_nice,NULL);
+  thread_update_priority_with_nice_all();
+
+  /* a choice better predictable and performance */
+  list_sort(&ready_list,thread_priority_large_func,NULL);
 }
 
 /* update load_avg when timer interrupt triggers */
