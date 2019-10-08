@@ -35,38 +35,77 @@ thread.h:
 timer.c:
     /* alarm thread sleeping list */
     static struct list alarm_list;
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
-We init an alarm list at beginning where contains sleeping threads  and be ordered by
-threads' wake up time. When call timer_sleep(), first check if it is a fair time. Next, disable
-interrupt and record the previous interrupt status. Then take out the current thread,
-change its wake_up_time to the absolute time it should wake up, and insert it to the 
-alarm_list according to its wake_up_time. After that, block it and set the interrupt level
-to the previous status.
-The timer interrupt handler mainly check if there is any thread should wake up. While the 
-alarm_list is not empty, everytime check if the first item's wake_up_time is less than current
-time, if yes then unblock it and remove it from alarm_list.
+
+We init an alarm list at beginning where contains sleeping threads  
+and be ordered by threads' wake up time. When call timer_sleep(),
+first check if it is a fair time. Next, disable interrupt and record the
+previous interrupt status. Then take out the current thread, change 
+its wake_up_time to the absolute time it should wake up, and insert it
+to the alarm_list according to its wake_up_time. After that, block it and
+set the interrupt level to the previous status.
+The timer interrupt handler mainly check if there is any thread should
+wake up. While the alarm_list is not empty, everytime check if the first 
+item's wake_up_time is less than current time, if yes then unblock it and
+remove it from alarm_list.
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
-We make an alarm_list to record the sleeping threads and sort them by wake_up_time.
-Everytime we only need check the first element in the alarm_list, if its wake_up_time is
-larger than current time, this means no thread in the list need to wake up, otherwise
-we unblock it the check the next one. By this way we can ensure the time waste on 
-those who remain sleeping is up to one thread, acutually just one compare function.
+
+We make an alarm_list to record the sleeping threads and sort them by 
+wake_up_time.
+Everytime we only need check the first element in the alarm_list, if its 
+wake_up_time is
+larger than current time, this means no thread in the list need to wake 
+up, otherwise we unblock it the check the next one. By this way we can 
+ensure the time waste on those who remain sleeping is up to one thread, 
+acutually just one compare function.
+
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+By disabling interrupt before any thread wants to sleep, the race conditions
+are avoided. When multiple threads call timer_sleep(), only one thread can 
+operate the alarm_list and others will be obstructed, we need to protect 
+thread_current() is always one thread. After the thread blocks itself, change 
+back the original interrupt level, then other threads can sleep themselves one
+by one.
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+By disabling interrupt before any thread wants to sleep, the race conditions
+are avoided. If the timer interrupt occurs before we disable interrupt or 
+after we change back the original interrupt, then nothing wrong would 
+happen, only timer_interrupt() would operate alarm_list this time, it would 
+check if there is any thread need to wake up, and the thread who called 
+timer_sleep() hasn't do anything to itself or has already blocked itself.
+If the timer interrupt occurs after we disable interrupt, it would find itself 
+unable to interrupt the timer_sleep(), this time only the thread who called 
+timer_sleep() can operate the alarm_list and block itself.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+The design is superior to other design by two reasons.
+1. We record an absolute waking-up time point when a thread want to sleep,
+then when we check if a thread should wake up, we only need to compare
+its wake_up_time with current time instead of maintaining a decreasing 
+time bucket every tick. 
+2. We create a priority queue alarm_list to preserve sleeping threads. We sort
+it by their waking-up time, which ensuring that the first thread is always the 
+earliest thread need to wake up. If the first thread doesn't need to wake up,
+then threads after it also don't need to wake up. We only need one compare
+function to check if there are any other threads want to wake up instead of 
+check every sleeping thread every tick.
 
 			 PRIORITY SCHEDULING
 			 ===================
