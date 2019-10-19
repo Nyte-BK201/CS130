@@ -580,6 +580,9 @@ init_thread (struct thread *t, const char *name, int priority)
     t->recent_cpu = INT_TO_FP(0);
   }
 
+  /* ============================ project 2 =============================*/
+  t->ret = 0;
+
   t->magic = THREAD_MAGIC;
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, 

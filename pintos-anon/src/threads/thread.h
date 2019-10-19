@@ -109,6 +109,9 @@ struct thread
     /* nice and recent_cpu */
     int nice;
     fixed_point recent_cpu;
+/* =============================== project 2 =============================== */
+    /* exit code when a user process terminates */
+    int ret;
     
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
