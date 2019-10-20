@@ -110,6 +110,9 @@ process_exit (void)
   // User program can not be NULL; A kernel process can
   if (pd != NULL) 
     {
+      /* pring exit info before destroying */
+      printf ("%s: exit(%d)\n", cur->name, cur->ret);
+      
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -119,9 +122,7 @@ process_exit (void)
          that's been freed (and cleared). */
       cur->pagedir = NULL;
       pagedir_activate (NULL);
-      pagedir_destroy (pd);
-
-      printf ("%s: exit(%d)\n", cur->name, cur->ret);
+      pagedir_destroy (pd);  
     }
   
 }
