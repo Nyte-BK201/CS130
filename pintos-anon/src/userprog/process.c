@@ -361,7 +361,7 @@ load (const char *input_cmd, void (**eip) (void), void **esp)
   *sp = 0;
 
   /* push arg pointer Right-To-Left */
-  for (int i=argc-1; i>=0; i++){
+  for (int i=argc-1; i>=0; i--){
     sp -= 4;
     *sp = argv[i];
   }
