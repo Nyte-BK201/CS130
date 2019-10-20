@@ -366,6 +366,10 @@ load (const char *input_cmd, void (**eip) (void), void **esp)
     *sp = argv[i];
   }
 
+  /* push arg pointer */
+  sp -= 4;
+  *sp = sp+4;
+  
   /* push arg counter */
   sp -= 4;
   *sp = argc;
