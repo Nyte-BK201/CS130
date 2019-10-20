@@ -56,13 +56,64 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  /* keep track of the tokenizer's position */
+  char *save_ptr = NULL;
+  /* Save parameters of the function */
+  char *para;
+  /* Split the program name */
+  char *prog_name = strtok_r(file_name_," ", &save_ptr);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (prog_name, &if_.eip, &if_.esp);
+
+  char *local_esp = if_.esp;
+  /* record each parameter and its location */
+  char *para_name[128], esp_addr[128];
+  int i = 0;
+  
+  /* get parameters */
+  while ((para = strtok_r(NULL," ", &save_ptr))!= NULL){
+    para_name[i] = para; 
+    i++;
+  }
+  esp_addr[0] = 0;
+  /* Put the arguments for the function on the stack in inverted order*/
+  for (int t = i; t >= 0; t--)
+  {
+    /* move the sp and copy into the stack*/
+    local_esp -= strlen(para_name[t]) + 1;
+    strcpy(local_esp,para);
+    esp_addr[i-t+1] = local_esp;
+  }
+
+  /* word align */
+  while ((int)local_esp % 4 != 0)
+  {
+    local_esp -= 1;
+    *local_esp = 0;//here I want to put a uint8_t 0 but I have no idea, is null a good idea?
+  }
+
+  /* Push the address of each string plus a null pointer sentinel on the stack */
+  for (int j = 0; j < i + 1; j++)
+  {
+    local_esp -= 4;
+    *local_esp = esp_addr[j];
+  }
+  /* push argv (the address of argv[0]) and argc */
+  local_esp -= 4 ;
+  *local_esp = local_esp + 4;
+  int *pargc;
+  pargc = local_esp - 4;
+  *pargc = 0;
+  local_esp = pargc;
+  /* push a fake "return address" */
+  if_.esp = local_esp - 4;
+  *if_.esp = (void)0; // this 0 should be void(*)()
+  
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
