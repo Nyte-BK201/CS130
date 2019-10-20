@@ -30,8 +30,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-  /* keep track of the tokenizer's position */
-  char *save_ptr = NULL;
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -40,7 +39,9 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Split the program name */
+  char *save_ptr = NULL;
   char *prog_name = strtok_r(file_name," ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (prog_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -62,12 +63,14 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {  
     thread_exit ();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -104,6 +107,7 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
+  // User program can not be NULL; A kernel process can
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -116,8 +120,10 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+
+      printf ("%s: exit(%d)\n", cur->name, cur->ret);
     }
-  printf ("%s: exit(%d)\n", cur->name, cur->ret);
+  
 }
 
 /* Sets up the CPU for running user code in the current
@@ -205,12 +211,12 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
 
-/* Loads an ELF executable from FILE_NAME into the current thread.
+/* Loads an ELF executable from CMD_LINE into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *input_cmd, void (**eip) (void), void **esp) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -224,6 +230,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+
+/* ============================ project 2 ============================= */
+  /* slpit file_name from cmd */
+  char *save_ptr = NULL;
+  char *file_name = strtok_r(input_cmd," ", &save_ptr);
+
+
 
   /* Open executable file. */
   file = filesys_open (file_name);
@@ -308,6 +321,61 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
+
+/* ============================ project 2 ============================= */
+
+  /* Stack Pointer calculate in bytes */
+  char *sp = (char *) esp;
+  
+  /* Setup stack success, allocate arguments for process 
+      Max 256 arguments saved in argv Left-To-Right */
+  const int arg_limit = 256;
+  char *argv[arg_limit];
+  int argc = 0;
+  int size = 4 + 4 + 4 + 4;
+  char *token = NULL;
+
+  /* Already skip the file name;
+    Impose a 4kB limit on arguments passing */
+  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
+      token = strtok_r (NULL, " ", &save_ptr)){
+
+        size += strlen(token)+1  + 4;
+
+        if(argc+1 == arg_limit || size > PGSIZE){
+          printf("Passing arguments over %d numbers or length over 4kB\n",
+                arg_limit);
+          goto done;
+        }
+
+        sp -= strlen(token)+1;
+        strlcpy(sp, token, strlen(token)+1);
+        argv[argc++] = sp;
+      }
+
+  /* align; no guarante what inside this gap */
+  while((int)sp % 4 != 0) sp--;
+
+  /* push a zero */
+  sp -= 4;
+  *sp = 0;
+
+  /* push arg pointer Right-To-Left */
+  for (int i=argc-1; i>=0; i++){
+    sp -= 4;
+    *sp = argv[i];
+  }
+
+  /* push arg counter */
+  sp -= 4;
+  *sp = argc;
+
+  /* push return address */
+  sp -= 4;
+  *sp = 0;
+
+  esp = sp;
+/* ================================================== */
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
