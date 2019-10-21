@@ -6,6 +6,9 @@
 #include "lib/user/syscall.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -49,10 +52,57 @@ _exit_(int status){
   thread_exit ();
 }
 
-static pid_t _exec_(const char *cmd_line){
+static pid_t
+_exec_(const char *cmd_line){
 
 }
 
-static int _wait_(pid_t pid){
+static int
+_wait_(pid_t pid){
   return process_wait(pid);
+}
+
+static bool
+_create_(const char *file, unsigned initial_size){
+
+}
+
+static bool
+_remove_ (const char *file){
+
+}
+
+static int
+_open_ (const char *file){
+
+}
+
+static int
+_filesize_ (int fd){
+
+}
+
+static int
+_read_ (int fd, void *buffer, unsigned size){
+
+}
+
+static int
+_write_ (int fd, const void *buffer, unsigned size){
+
+}
+
+static void
+_seek_ (int fd, unsigned position){
+
+}
+
+static unsigned
+_tell_ (int fd){
+  file_tell()
+}
+
+static void
+_close_ (int fd){
+
 }
