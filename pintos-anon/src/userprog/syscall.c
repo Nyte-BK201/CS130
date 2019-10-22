@@ -3,6 +3,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "devices/shutdown.h"
+#include "devices/input.h"
 #include "lib/user/syscall.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
@@ -37,7 +38,16 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  printf ("system call!\n");
+  //printf ("system call!\n");
+  int num = *(int*)f->esp;
+  if (num == SYS_WRITE)
+  {
+    int fd = *(int*)(f->esp + 4);
+    char* buf = (char*)(f->esp + 8);
+    size_t size = *(int*)(f->esp + 12);
+    putbuf(buf,size);
+    f->eax = size;
+  }
   thread_exit ();
 }
 
@@ -99,7 +109,7 @@ _seek_ (int fd, unsigned position){
 
 static unsigned
 _tell_ (int fd){
-  file_tell()
+  // file_tell();
 }
 
 static void

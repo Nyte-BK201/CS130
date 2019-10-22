@@ -324,7 +324,7 @@ load (const char *input_cmd, void (**eip) (void), void **esp)
     goto done;
 
 /* ============================ project 2 ============================= */
-
+{
   /* Stack Pointer calculate in bytes */
   char *sp = (char *) esp;
   
@@ -380,6 +380,7 @@ load (const char *input_cmd, void (**eip) (void), void **esp)
   *sp = 0;
 
   esp = sp;
+}
 /* ================================================== */
 
   /* Start address. */
