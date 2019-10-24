@@ -112,18 +112,24 @@ void
 sema_up (struct semaphore *sema) 
 {
   enum intr_level old_level;
-
+  bool yield_if_necessary = false;
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)){
-    thread_unblock (list_entry
-      (list_pop_front (&sema->waiters), struct thread, elem));
+    struct thread *next = list_entry
+      (list_pop_front (&sema->waiters), struct thread, elem);
+    
+    if(next->priority > thread_current()->priority){
+      yield_if_necessary = true;     
+    }
+      
+    thread_unblock (next);
   } 
     
   sema->value++;
   intr_set_level (old_level);
-  thread_yield();
+  if(yield_if_necessary && !intr_context()) thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -275,12 +281,13 @@ lock_try_acquire (struct lock *lock)
    handler. */
 void
 lock_release (struct lock *lock) 
-{
+{ 
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
   enum intr_level old_level = intr_disable ();
 
   struct thread *cur = thread_current ();
+
   /* unblock the highest priority thread 
     and give out all the priority get from this lock(include current) */
   if(cur->stored_index != 0){
@@ -324,7 +331,6 @@ lock_release (struct lock *lock)
 
   intr_set_level (old_level);
   /* give up cpu to let scheduler decide next */
-  thread_yield();
 }
 
 /* Returns true if the current thread holds LOCK, false

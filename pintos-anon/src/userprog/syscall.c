@@ -38,6 +38,22 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   printf ("system call!\n");
+  /* Calculate stack pointer in 4 bytes */
+  int *sp = (int *)f->esp;
+
+  int call = *sp;
+  if(call==SYS_HALT){
+    _halt_();
+  }else if(call==SYS_EXIT){
+    _exit_(0);
+  }else if(call==SYS_EXEC){
+    _exec_(*(sp+1));
+  }else if(call==SYS_WAIT){
+    _wait_(*(sp+1));
+  }else if(call==SYS_CREATE){
+    // _create_(*(sp+1),)
+  }
+
   thread_exit ();
 }
 
@@ -99,7 +115,7 @@ _seek_ (int fd, unsigned position){
 
 static unsigned
 _tell_ (int fd){
-  file_tell()
+  // file_tell()
 }
 
 static void

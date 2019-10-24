@@ -94,6 +94,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+
   return -1;
 }
 
@@ -226,6 +227,9 @@ load (const char *input_cmd, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  const int arg_limit = 256;
+  char *argv[arg_limit];
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -330,8 +334,6 @@ load (const char *input_cmd, void (**eip) (void), void **esp)
   
   /* Setup stack success, allocate arguments for process 
       Max 256 arguments saved in argv Left-To-Right */
-  const int arg_limit = 256;
-  char *argv[arg_limit];
   int argc = 0;
   int size = 4 + 4 + 4 + 4;
   char *token = NULL;

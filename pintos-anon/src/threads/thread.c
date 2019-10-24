@@ -114,6 +114,9 @@ thread_start (void)
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
 
+  /* enable scheduling after thread_start */
+  scheduler_init = true;
+
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
@@ -349,16 +352,18 @@ thread_set_priority (int new_priority)
   enum intr_level old_level=intr_disable ();
 
   struct thread *cur = thread_current ();
+  bool yield_if_necessary = false;
 
   /* if current priority gets from donation, we should not change it */
   if(cur->stored_index != 0){
     cur->stored_priority[0] = new_priority;
   }else{
     cur->priority=new_priority;
+    yield_if_necessary = true;
   }
   
   intr_set_level (old_level);
-  thread_yield();  
+  if(yield_if_necessary) thread_yield();  
 }
 
 /* Returns the current thread's priority. */
