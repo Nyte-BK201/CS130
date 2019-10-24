@@ -31,6 +31,16 @@ static void _close_ (int fd);
 void
 syscall_init (void) 
 {
+// int num = *(int*)f->esp;
+//   if (num == SYS_WRITE)
+//   {
+//     int fd = *(int*)(f->esp + 4);
+//     char* buf = (char*)(f->esp + 8);
+//     size_t size = *(int*)(f->esp + 12);
+//     putbuf(buf,size);
+//     f->eax = size;
+//   }
+
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -52,7 +62,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     _wait_(*(sp+1));
   }else if(call==SYS_CREATE){
     // _create_(*(sp+1),)
-  }
+  }else if(call==)
 
   thread_exit ();
 }
