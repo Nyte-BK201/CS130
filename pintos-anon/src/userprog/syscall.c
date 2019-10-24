@@ -31,15 +31,15 @@ static void _close_ (int fd);
 void
 syscall_init (void) 
 {
-// int num = *(int*)f->esp;
-//   if (num == SYS_WRITE)
-//   {
-//     int fd = *(int*)(f->esp + 4);
-//     char* buf = (char*)(f->esp + 8);
-//     size_t size = *(int*)(f->esp + 12);
-//     putbuf(buf,size);
-//     f->eax = size;
-//   }
+  // int num = *(int*)f->esp;
+  // if (num == SYS_WRITE)
+  // {
+  //   int fd = *(int*)(f->esp + 1);
+  //   char* buf = (char*)(f->esp + 2);
+  //   size_t size = *(int*)(f->esp + 3);
+  //   putbuf(buf,size);
+  //   f->eax = size;
+  // }
 
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
@@ -52,19 +52,26 @@ syscall_handler (struct intr_frame *f UNUSED)
   int *sp = (int *)f->esp;
 
   int call = *sp;
+  if ((sp + 1) == NULL || !is_user_vaddr(sp + 1)){
+    _exit_(-1);
+  }
   if(call==SYS_HALT){
     _halt_();
   }else if(call==SYS_EXIT){
     _exit_(0);
   }else if(call==SYS_EXEC){
-    _exec_(*(sp+1));
+    f->eax = _exec_((char *)*(sp + 1)); 
   }else if(call==SYS_WAIT){
     _wait_(*(sp+1));
   }else if(call==SYS_CREATE){
-    // _create_(*(sp+1),)
-  }else if(call==)
+    f->eax = _create_((char *)*(sp + 1), *(sp + 2));
+  }else if(call==SYS_REMOVE){
+    f->eax = _remove_((char *)*(sp + 1));
+  }else if(call==SYS_OPEN){
 
-  thread_exit ();
+  }
+
+  thread_exit();
 }
 
 static void
@@ -75,12 +82,18 @@ _halt_(void){
 static void
 _exit_(int status){
   thread_current()->ret = status;
-  thread_exit ();
+  thread_exit();
 }
 
 static pid_t
 _exec_(const char *cmd_line){
-
+  pid_t pid = process_execute(cmd_line);
+  /* Check if the child executed successfully */
+  // if (_wait_(pid) == -1){
+  //   return -1;
+  // }else{
+  //   return pid;
+  // }
 }
 
 static int
@@ -90,12 +103,12 @@ _wait_(pid_t pid){
 
 static bool
 _create_(const char *file, unsigned initial_size){
-
+  return(filesys_create(file,initial_size));
 }
 
 static bool
 _remove_ (const char *file){
-
+  return(filesys_remove(file));
 }
 
 static int

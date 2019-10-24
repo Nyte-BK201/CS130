@@ -112,7 +112,10 @@ struct thread
 /* =============================== project 2 =============================== */
     /* exit code when a user process terminates */
     int ret;
-    
+    /* child success sema & load status*/
+    struct semaphore *child_sema;
+    bool child_success;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

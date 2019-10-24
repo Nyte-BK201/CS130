@@ -114,9 +114,6 @@ thread_start (void)
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
 
-  /* enable scheduling after thread_start */
-  scheduler_init = true;
-
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
@@ -587,6 +584,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /* ============================ project 2 =============================*/
   t->ret = 0;
+  sema_init(&(t->child_sema),1);
 
   t->magic = THREAD_MAGIC;
   old_level = intr_disable ();
