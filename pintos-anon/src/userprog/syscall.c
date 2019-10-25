@@ -38,14 +38,14 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  printf ("system call!\n");
   /* Calculate stack pointer in 4 bytes */
   int *sp = (int *)f->esp;
-
   int call = *sp;
-  if ((sp + 1) == NULL || !is_user_vaddr(sp + 1)){
-    _exit_(-1);
-  }
+  printf ("system call: %d\n", call);
+
+  // if ((sp + 1) == NULL || !is_user_vaddr(sp + 1)){
+    // _exit_(-1);
+  // }
 
   if(call==SYS_HALT){
     _halt_();
