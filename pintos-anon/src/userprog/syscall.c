@@ -9,6 +9,8 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/vaddr.h"
+#include "lib/stdio.h"
+#include "lib/kernel/console.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -31,16 +33,6 @@ static void _close_ (int fd);
 void
 syscall_init (void) 
 {
-  // int num = *(int*)f->esp;
-  // if (num == SYS_WRITE)
-  // {
-  //   int fd = *(int*)(f->esp + 1);
-  //   char* buf = (char*)(f->esp + 2);
-  //   size_t size = *(int*)(f->esp + 3);
-  //   putbuf(buf,size);
-  //   f->eax = size;
-  // }
-
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -51,6 +43,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   /* Calculate stack pointer in 4 bytes */
   int *sp = (int *)f->esp;
 
+  
   int call = *sp;
   if ((sp + 1) == NULL || !is_user_vaddr(sp + 1)){
     _exit_(-1);
@@ -69,8 +62,20 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = _remove_((char *)*(sp + 1));
   }else if(call==SYS_OPEN){
 
-  }
+  }else if(call==SYS_FILESIZE){
 
+  }else if(call==SYS_READ){
+
+  }else if(call==SYS_WRITE){
+    f->eax = _write_(*(sp+1), (char *)*(sp+2), *(sp+3));
+  }else if(call==SYS_SEEK){
+
+  }else if(call==SYS_TELL){
+
+  }else if(call==SYS_CLOSE){
+
+  }
+  
   thread_exit();
 }
 
@@ -128,7 +133,10 @@ _read_ (int fd, void *buffer, unsigned size){
 
 static int
 _write_ (int fd, const void *buffer, unsigned size){
-
+  if(fd == STDOUT_FILENO){
+    putbuf(buffer,size);
+    return size;
+  }
 }
 
 static void

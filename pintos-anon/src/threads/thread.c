@@ -584,7 +584,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /* ============================ project 2 =============================*/
   t->ret = 0;
-  sema_init(&(t->child_sema),1);
+  // sema_init(&(t->child_sema),1);
 
   t->magic = THREAD_MAGIC;
   old_level = intr_disable ();
