@@ -97,6 +97,10 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+/* =============================== project 2 =============================== */
+    /* exit code when a user process terminates */
+    int ret;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

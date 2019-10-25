@@ -113,6 +113,9 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+
+      /* A process with pagedir must be a user process */
+      printf ("%s: exit(%d)\n", cur->name, cur->ret);
     }
 }
 
@@ -206,7 +209,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *input_cmd, void (**eip) (void), void **esp) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -214,6 +217,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+
+  /* ==================== project 2 =================== */
+  /* Setup stack success, allocate arguments for process 
+    Max 256 arguments saved in argv Left-To-Right */
+  const int arg_limit = 256;
+  char *argv[arg_limit];
+
+  /* slpit file_name from cmd */
+  char *save_ptr = NULL;
+  char *file_name = strtok_r(input_cmd," ", &save_ptr);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -304,6 +317,61 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
+
+/* ============================ project 2 ============================= */
+
+  /* Stack Pointer calculate in bytes */
+  char *sp = (char *) esp;
+  
+  int argc = 0;
+  int size = 4 + 4 + 4 + 4;
+  char *token = NULL;
+
+  /* Already skip the file name;
+    Impose a 4kB limit on arguments passing */
+  for (token = strtok_r (input_cmd, " ", &save_ptr); token != NULL;
+      token = strtok_r (NULL, " ", &save_ptr)){
+
+        size += strlen(token)+1  + 4;
+
+        if(argc+1 == arg_limit || size > PGSIZE){
+          printf("Passing arguments over %d numbers or length over 4kB\n",
+                arg_limit);
+          goto done;
+        }
+
+        sp -= strlen(token)+1;
+        strlcpy(sp, token, strlen(token)+1);
+        argv[argc++] = sp;
+      }
+
+  /* align; no guarante what inside this gap */
+  while((int)sp % 4 != 0) sp--;
+
+  /* push a zero */
+  sp -= 4;
+  *sp = 0;
+
+  /* push arg pointer Right-To-Left */
+  for (int i=argc-1; i>=0; i--){
+    sp -= 4;
+    *sp = argv[i];
+  }
+
+  /* push arg pointer */
+  sp -= 4;
+  *sp = sp+4;
+  
+  /* push arg counter */
+  sp -= 4;
+  *sp = argc;
+
+  /* push return address */
+  sp -= 4;
+  *sp = 0;
+
+  esp = sp;
+/* ================================================== */
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
