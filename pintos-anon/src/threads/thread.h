@@ -100,6 +100,10 @@ struct thread
 /* =============================== project 2 =============================== */
     /* exit code when a user process terminates */
     int ret;
+    /* store files open in this thread */
+    struct file *file_use[128];
+    /* a suggested fd, record the smallest spare fd */
+    int fd_suggest;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

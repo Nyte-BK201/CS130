@@ -60,15 +60,20 @@ syscall_handler (struct intr_frame *f UNUSED)
   }else if(call==SYS_REMOVE){
     f->eax = _remove_((char *)*(sp + 1));
   }else if(call==SYS_OPEN){
-
+    if ((sp + 1) == NULL) _exit_(-1);
+    if (!is_user_vaddr(sp + 1)) _exit_(-1);
+    if (!is_user_vaddr(sp + 2)) _exit_(-1);
+    f->eax = _open_((char *)*(sp + 1));
   }else if(call==SYS_FILESIZE){
-
+    if ((sp + 1) == NULL) _exit_(-1);
+    if (!is_user_vaddr(sp + 1)) _exit_(-1);
+    f->eax = _filesize_(*(sp + 1));
   }else if(call==SYS_READ){
-
+    
   }else if(call==SYS_WRITE){
     f->eax = _write_(*(sp+1), (char *)*(sp+2), *(sp+3));
   }else if(call==SYS_SEEK){
-
+    _seek_(*(sp + 5), *(sp + 4)); //uncertain offset
   }else if(call==SYS_TELL){
 
   }else if(call==SYS_CLOSE){
@@ -118,12 +123,44 @@ _remove_ (const char *file){
 
 static int
 _open_ (const char *file){
+  int fd;
+  struct thread *cur = thread_current();
 
+  /* Open the file as the given name */
+  struct file *curfile = filesys_open(file);
+
+  /* Check if the file is opened */
+  if (!curfile){
+    fd = -1;
+  }
+
+  /* Put the file into the thread */
+  if (cur->file_use[cur->fd_suggest] == NULL){
+    cur->file_use[cur->fd_suggest] = curfile;
+    fd = cur->fd_suggest;
+    /* Find next suitable fd */
+    while (cur->file_use[cur->fd_suggest] != NULL){
+      cur->fd_suggest++;
+    }
+  }
+
+  return fd;
 }
 
 static int
 _filesize_ (int fd){
+  struct thread *cur = thread_current();
 
+  /* Get the target file */
+  struct file *curfile = cur->file_use[fd];
+
+  /* Check if the file is opened */
+  if (!curfile){
+    return -1;
+  }
+
+  /* Calculate the size */
+  return (file_length(curfile));
 }
 
 static int
@@ -141,7 +178,15 @@ _write_ (int fd, const void *buffer, unsigned size){
 
 static void
 _seek_ (int fd, unsigned position){
+  struct thread *cur = thread_current();
 
+  /* Get the target file */
+  struct file *curfile = cur->file_use[fd];
+
+  /* seek */
+  if (curfile){
+    file_seek(curfile, position);
+  }
 }
 
 static unsigned
