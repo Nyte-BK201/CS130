@@ -20,12 +20,12 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-bool argument_pass(char *save_ptr, void **esp){
+bool argument_pass(const char *cmdline, void **esp){
   /* Setup stack success, allocate arguments for process 
     Max 256 arguments saved in argv Left-To-Right */
   const int arg_limit = 256;
   char *argv[arg_limit];
-
+  char *save_ptr = NULL;
   /* Stack Pointer calculate in bytes */
   char *sp = (char *) esp;  
   int argc = 0;
@@ -34,16 +34,16 @@ bool argument_pass(char *save_ptr, void **esp){
 
   /* Already skip the file name;
     Impose a 4kB limit on arguments passing */
-  for (token = strtok_r (NULL, " ", &save_ptr); token != NULL;
+  for (token = strtok_r (cmdline, " ", &save_ptr); token != NULL;
       token = strtok_r (NULL, " ", &save_ptr)){
 
         size += strlen(token)+1  + 4;
 
-        // if(argc+1 == arg_limit || size > PGSIZE){
-        //   printf("Passing arguments over %d numbers or length over 4kB\n",
-        //         arg_limit);
-        //  return false;
-        // }
+        if(argc+1 == arg_limit || size > PGSIZE){
+          printf("Passing arguments over %d numbers or length over 4kB\n",
+                arg_limit);
+          return false;
+        }
 
         sp -= strlen(token)+1;
         strlcpy(sp, token, strlen(token)+1);
@@ -77,7 +77,7 @@ bool argument_pass(char *save_ptr, void **esp){
   sp -= 4;
   *(int *)sp = 0;
 
-  esp = sp;
+  *esp = sp;
   return true;
 }
 
@@ -124,13 +124,18 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+  /* make a copy to argument_passing */
+  char cmdline[strlen(file_name)+1];
+  strlcpy(cmdline, file_name, strlen (file_name)+1);
+
   /* slpit file_name from cmd */
   char *save_ptr = NULL;
   char *thread_name = strtok_r(file_name," ", &save_ptr);
   success = load (thread_name, &if_.eip, &if_.esp);
 
   if(success){
-    argument_pass(save_ptr,&if_.esp);
+    argument_pass(cmdline,&if_.esp);
+    // hex_dump(if_.esp,if_.esp,64,true));
   }
 
   /* If load failed, quit. */
@@ -160,7 +165,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  timer_sleep(10000000);
+  while(true){
+    thread_yield();
+  }
   return -1;
 }
 
