@@ -284,8 +284,13 @@ process_exit (void)
   lock_release(cur->status_as_child->child_list_lock);
 
   /* C: close all opened files */
-  
+  for(int fd=2;fd<130;fd++){
+    if(cur->file_use[fd] != NULL){
+      file_close (cur->file_use[fd]);
+    }
+  }
 
+  /* D: destory page allocated */
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

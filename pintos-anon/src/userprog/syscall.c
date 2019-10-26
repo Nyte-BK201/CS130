@@ -183,10 +183,8 @@ static int
 _filesize_ (int fd){
   if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
 
-  struct thread *cur = thread_current();
-
   /* Get the target file */
-  struct file *curfile = cur->file_use[fd];
+  struct file *curfile = thread_current()->file_use[fd];
 
   /* Check if the file is opened */
   if (!curfile){
@@ -201,9 +199,10 @@ static int
 _read_ (int fd, void *buffer, unsigned size){
   if(fd == STDOUT_FILENO) _exit_(-1);
   check_ptr_length(buffer,size);
+
+  struct file *curfile = thread_current()->file_use[fd];
+
   
-
-
 }
 
 static int
@@ -221,10 +220,8 @@ static void
 _seek_ (int fd, unsigned position){
   // if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
 
-  struct thread *cur = thread_current();
-
   /* Get the target file */
-  struct file *curfile = cur->file_use[fd];
+  struct file *curfile = thread_current()->file_use[fd];
 
   /* seek */
   if (curfile){
@@ -236,10 +233,8 @@ static unsigned
 _tell_ (int fd){
   // if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
 
-  struct thread *cur = thread_current();
-
   /* Get the target file */
-  struct file *curfile = cur->file_use[fd];
+  struct file *curfile = thread_current()->file_use[fd];
 
   /* Check if the file is opened */
   if (!curfile){
