@@ -43,6 +43,7 @@ bool check_ptr(char *ptr){
   return true;
 }
 
+/* check ptr and ptr + 4 (in bytes) */
 bool check_ptr_length(char *ptr, int length){
   check_ptr(ptr);
   check_ptr(ptr+length-1);
@@ -61,12 +62,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   /* Calculate stack pointer in 4 bytes */
   int *sp = (int *)f->esp;
+  check_ptr_length(sp,4);
+
   int call = *sp;
   printf ("system call: %d\n", call);
-
-  // if ((sp + 1) == NULL || !is_user_vaddr(sp + 1)){
-    // _exit_(-1);
-  // }
 
   if(call == SYS_HALT){
     _halt_();
@@ -77,6 +76,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     check_ptr_length(sp+1,4);
     f->eax = _exec_(*(sp + 1)); 
   }else if(call == SYS_WAIT){
+    check_ptr_length(sp+1,4);
     _wait_(*(sp+1));
   }else if(call == SYS_CREATE){
     f->eax = _create_(*(sp + 1), *(sp + 2));

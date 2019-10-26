@@ -19,14 +19,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-/* struct use to convey info between parent and child */
-struct process_load_arg{
-  struct semaphore sema;  /* sync */
-  char *cmdline;          /* cmdline */
-  bool success;           /* is child loaded successful */
-  // tid_t parent_tid;
-};
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 bool argument_pass(const char *cmdline, void **esp){
@@ -90,6 +82,14 @@ bool argument_pass(const char *cmdline, void **esp){
   return true;
 }
 
+/* struct use to convey info between parent and child */
+struct process_load_arg{
+  struct semaphore sema;  /* sync */
+  char *cmdline;          /* cmdline */
+  bool success;           /* is child loaded successful */
+  struct wait_status *status_as_child; /* node in child list */
+};
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -115,6 +115,13 @@ process_execute (const char *file_name)
   struct process_load_arg load_arg;
   load_arg.success = false;
   load_arg.cmdline = fn_copy;
+  /* new a node in child list */
+  load_arg.status_as_child = (struct wait_status*) 
+                              malloc(sizeof(struct wait_status));
+  load_arg.status_as_child->parent_alive = true;
+  load_arg.status_as_child->child_list_lock = 
+                          &thread_current()->child_list_lock;
+
   sema_init(&load_arg.sema,0);
 
   /* Create a new thread to execute FILE_NAME. */
@@ -125,9 +132,18 @@ process_execute (const char *file_name)
   /* after load is done, we can free copy
     and return child's status */
   palloc_free_page (fn_copy); 
-  if (tid == TID_ERROR || !load_arg.success)
+  if (tid == TID_ERROR || !load_arg.success){
+    free(load_arg.status_as_child);
     return -1;
-  else return tid;
+  }else{
+    lock_acquire(load_arg.status_as_child->child_list_lock);
+    load_arg.status_as_child->child_pid = tid;
+    /* load success; add it to list */
+    list_push_back (&thread_current()->child_list, 
+                    &load_arg.status_as_child->elem);
+    lock_release(load_arg.status_as_child->child_list_lock);
+    return tid;
+  }
 }
 
 /* A thread function that loads a user process and starts it
@@ -155,12 +171,20 @@ start_process (void *aux)
     /* make a copy to argument_passing */
     char cmdline[strlen(file_name)+1];
     strlcpy(cmdline, file_name, strlen (file_name)+1);
-    
+
     /* if argument_passing is successfully, load is successful */
     load_arg->success = argument_pass(cmdline,&if_.esp);
     // hex_dump(if_.esp,if_.esp,64,true));
 
-    
+    if(load_arg->success){
+      thread_current ()->status_as_child = load_arg->status_as_child;
+
+      /* mark alive */
+      lock_acquire(load_arg->status_as_child->child_list_lock);
+      load_arg->status_as_child->child_alive = true;
+      sema_init(&load_arg->status_as_child->sema,0);
+      lock_release(load_arg->status_as_child->child_list_lock);
+    }    
   }
 
   /* wake up parent process */
@@ -192,9 +216,29 @@ start_process (void *aux)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(true){
-    thread_yield();
-  }
+  struct thread *cur = thread_current();
+
+  lock_acquire(&cur->child_list_lock);
+  /* tranverse list to find match pid child */
+  for(struct list_elem *e = list_begin(&cur->child_list);
+      e != list_end(&cur->child_list);
+      e = list_next(e)){
+        struct wait_status *child_status = 
+                          list_entry(e,struct wait_status, elem);
+        /* find child with given pid */
+        if(child_status->child_pid == child_tid){
+          if(child_status->child_alive){
+            /* child alive, wait until terminate */
+            sema_down(&child_status->sema);
+            return child_status->child_ret;
+          }else{
+            /* dead, return directly */
+            return child_status->child_ret;
+          }
+        }
+      }
+  lock_release(&cur->child_list_lock);
+  /* child not found */
   return -1;
 }
 
@@ -204,6 +248,43 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  /* A: check child_list as a parent role */
+  /* free nodes in child_list if node's child already terminated */
+  lock_acquire(&cur->child_list_lock);
+  for(struct list_elem *e = list_begin(&cur->child_list);
+      e != list_end(&cur->child_list);
+      e = list_next(e)){
+        struct wait_status *child_status = 
+                          list_entry(e,struct wait_status, elem);
+        /* find dead child */
+        if(!child_status->child_alive){
+          list_remove(&child_status->elem);
+          free(child_status);
+        }else{
+          /* mark parent as dead to notice child to clean up */
+          child_status->parent_alive = false;
+        }
+      }
+  lock_release(&cur->child_list_lock);
+
+  /* B: check status_as_child as child role */
+  lock_acquire(cur->status_as_child->child_list_lock);
+  /* free the thread as child if parent is dead */
+  if(!cur->status_as_child->parent_alive){
+    list_remove(&cur->status_as_child->elem);
+    free(cur->status_as_child);
+  }else{
+    /* parent is alive; mark dead and save exit code then wake up in case 
+      parent may be waiting */
+    cur->status_as_child->child_ret = cur->ret;
+    cur->status_as_child->child_alive = false;
+    sema_up(&cur->status_as_child->sema);
+  }
+  lock_release(cur->status_as_child->child_list_lock);
+
+  /* C: close all opened files */
+  
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

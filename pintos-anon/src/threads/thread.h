@@ -100,10 +100,18 @@ struct thread
 /* =============================== project 2 =============================== */
     /* exit code when a user process terminates */
     int ret;
-    /* store files open in this thread */
-    struct file *file_use[128];
+    /* store files open in this thread; limit to 128, but we don't use 0,1 */
+    struct file *file_use[130];
     /* a suggested fd, record the smallest spare fd */
     int fd_suggest;
+
+    /* children's status list, every node is held by both parent and child
+      act as parent in this list */
+    struct list child_list;
+    struct lock child_list_lock; /* the same lock in every node */
+    /* act as child in this status node */
+    struct wait_status *status_as_child;
+    
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -113,6 +121,20 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+/* data race inside sturct since it is shared by parent and child;
+  be careful, we need to use lock to sync */
+struct wait_status{
+  /* if child/ parent is alive; edit by a thread itself */
+  bool child_alive;
+  bool parent_alive;
+  pid_t child_pid;  /* child's pid */
+  struct semaphore sema;  /* sema to wake up syscall wait */
+  int child_ret;  /* exit status of child */
+  struct list_elem elem;  /* list elem for child_list */
+  /* sync child_list is mutual exclusive; same lock in every node */
+  struct lock *child_list_lock; 
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
