@@ -130,7 +130,7 @@ start_process (void *file_name_)
   success = load (thread_name, &if_.eip, &if_.esp);
 
   if(success){
-    argument_pass(save_ptr,if_.esp);
+    argument_pass(save_ptr,&if_.esp);
   }
 
   /* If load failed, quit. */
