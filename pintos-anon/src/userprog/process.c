@@ -15,8 +15,17 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+
+/* struct use to convey info between parent and child */
+struct process_load_arg{
+  struct semaphore sema;  /* sync */
+  char *cmdline;          /* cmdline */
+  bool success;           /* is child loaded successful */
+  // tid_t parent_tid;
+};
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -102,45 +111,63 @@ process_execute (const char *file_name)
   char *save_ptr = NULL;
   char *thread_name = strtok_r(file_name," ", &save_ptr);
 
+  /* initialized arguments to execute */
+  struct process_load_arg load_arg;
+  load_arg.success = false;
+  load_arg.cmdline = fn_copy;
+  sema_init(&load_arg.sema,0);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-  return tid;
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, &load_arg);
+  /* wait until load finish */
+  sema_down(&load_arg.sema);
+
+  /* after load is done, we can free copy
+    and return child's status */
+  palloc_free_page (fn_copy); 
+  if (tid == TID_ERROR || !load_arg.success)
+    return -1;
+  else return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *aux)
 {
-  char *file_name = file_name_;
-  struct intr_frame if_;
-  bool success;
+  struct process_load_arg *load_arg = (struct process_load_arg*)aux;
+  char *file_name = load_arg->cmdline;
 
+  struct intr_frame if_;
+  bool load_success;
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-  /* make a copy to argument_passing */
-  char cmdline[strlen(file_name)+1];
-  strlcpy(cmdline, file_name, strlen (file_name)+1);
-
   /* slpit file_name from cmd */
   char *save_ptr = NULL;
   char *thread_name = strtok_r(file_name," ", &save_ptr);
-  success = load (thread_name, &if_.eip, &if_.esp);
+  load_success = load (thread_name, &if_.eip, &if_.esp);
 
-  if(success){
-    argument_pass(cmdline,&if_.esp);
+  if(load_success){
+    /* make a copy to argument_passing */
+    char cmdline[strlen(file_name)+1];
+    strlcpy(cmdline, file_name, strlen (file_name)+1);
+    
+    /* if argument_passing is successfully, load is successful */
+    load_arg->success = argument_pass(cmdline,&if_.esp);
     // hex_dump(if_.esp,if_.esp,64,true));
+
+    
   }
 
+  /* wake up parent process */
+  sema_up(&load_arg->sema);
+
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  if (!load_arg->success) 
     thread_exit ();
 
   /* Start the user process by simulating a return from an
