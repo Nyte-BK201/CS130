@@ -184,6 +184,10 @@ start_process (void *aux)
       load_arg->status_as_child->child_alive = true;
       sema_init(&load_arg->status_as_child->sema,0);
       lock_release(load_arg->status_as_child->child_list_lock);
+
+      /* file deny writes when executing */
+      thread_current ()->process_exec_file = filesys_open(thread_name);
+      file_deny_write (thread_current ()->process_exec_file);
     }    
   }
 
@@ -288,6 +292,11 @@ process_exit (void)
     if(cur->file_use[fd] != NULL){
       file_close (cur->file_use[fd]);
     }
+  }
+
+  if(cur->process_exec_file != NULL){
+    file_allow_write(cur->process_exec_file);
+    file_close(cur->process_exec_file);
   }
 
   /* D: destory page allocated */

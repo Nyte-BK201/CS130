@@ -111,6 +111,8 @@ struct thread
     struct lock child_list_lock; /* the same lock in every node */
     /* act as child in this status node */
     struct wait_status *status_as_child;
+
+    struct file *process_exec_file;
     
 
 #ifdef USERPROG
