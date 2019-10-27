@@ -55,7 +55,7 @@ bool check_ptr_char(char *ptr){
   // check_ptr(ptr);
   /* touch strlen may rise an error */
   // check_ptr(ptr+strlen(ptr));
-  
+
   /* check by byte if there is an end */
   for(char* i=ptr;;i++){
     check_ptr(i);
@@ -79,7 +79,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   check_ptr_length(sp,4);
 
   int call = *sp;
-  printf ("system call: %d\n", call);
+  // printf ("system call: %d\n", call);
 
   if(call == SYS_HALT){
     _halt_();
