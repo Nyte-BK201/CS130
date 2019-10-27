@@ -476,6 +476,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   /* ============================ project 2 ============================= */
+  list_init(&t->child_list);
   lock_init(&t->child_list_lock);
 
   for(int i=0;i<130;i++){

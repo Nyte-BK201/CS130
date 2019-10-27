@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
+#include "threads/malloc.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -130,7 +132,7 @@ struct wait_status{
   /* if child/ parent is alive; edit by a thread itself */
   bool child_alive;
   bool parent_alive;
-  pid_t child_pid;  /* child's pid */
+  int child_pid;  /* child's pid */
   struct semaphore sema;  /* sema to wake up syscall wait */
   int child_ret;  /* exit status of child */
   struct list_elem elem;  /* list elem for child_list */

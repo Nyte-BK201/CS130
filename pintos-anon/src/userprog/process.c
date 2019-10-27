@@ -18,6 +18,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -162,16 +163,16 @@ start_process (void *aux)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+  /* make a copy to argument_passing */
+    char cmdline[strlen(file_name)+1];
+    strlcpy(cmdline, file_name, strlen (file_name)+1);
+
   /* slpit file_name from cmd */
   char *save_ptr = NULL;
   char *thread_name = strtok_r(file_name," ", &save_ptr);
   load_success = load (thread_name, &if_.eip, &if_.esp);
 
   if(load_success){
-    /* make a copy to argument_passing */
-    char cmdline[strlen(file_name)+1];
-    strlcpy(cmdline, file_name, strlen (file_name)+1);
-
     /* if argument_passing is successfully, load is successful */
     load_arg->success = argument_pass(cmdline,&if_.esp);
     // hex_dump(if_.esp,if_.esp,64,true));
