@@ -29,7 +29,7 @@ bool argument_pass(const char *cmdline, void **esp){
   char *argv[arg_limit];
   char *save_ptr = NULL;
   /* Stack Pointer calculate in bytes */
-  char *sp = (char *) esp;  
+  char *sp = (char *) *esp;  
   int argc = 0;
   int size = 4 + 4 + 4 + 4;
   char *token = NULL;
@@ -274,19 +274,21 @@ process_exit (void)
   lock_release(&cur->child_list_lock);
 
   /* B: check status_as_child as child role */
-  lock_acquire(cur->status_as_child->child_list_lock);
-  /* free the thread as child if parent is dead */
-  if(!cur->status_as_child->parent_alive){
-    list_remove(&cur->status_as_child->elem);
-    free(cur->status_as_child);
-  }else{
-    /* parent is alive; mark dead and save exit code then wake up in case 
-      parent may be waiting */
-    cur->status_as_child->child_ret = cur->ret;
-    cur->status_as_child->child_alive = false;
-    sema_up(&cur->status_as_child->sema);
+  if(cur->status_as_child != NULL){
+    lock_acquire(cur->status_as_child->child_list_lock);
+    /* free the thread as child if parent is dead */
+    if(!cur->status_as_child->parent_alive){
+      list_remove(&cur->status_as_child->elem);
+      free(cur->status_as_child);
+    }else{
+      /* parent is alive; mark dead and save exit code then wake up in case 
+        parent may be waiting */
+      cur->status_as_child->child_ret = cur->ret;
+      cur->status_as_child->child_alive = false;
+      sema_up(&cur->status_as_child->sema);
+    }
+    lock_release(cur->status_as_child->child_list_lock);
   }
-  lock_release(cur->status_as_child->child_list_lock);
 
   /* C: close all opened files */
   for(int fd=2;fd<130;fd++){
