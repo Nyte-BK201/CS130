@@ -52,8 +52,17 @@ bool check_ptr_length(char *ptr, int length){
 
 /* check char pointer is valid first */
 bool check_ptr_char(char *ptr){
-  check_ptr(ptr);
-  check_ptr(ptr+strlen(ptr)-1);
+  // check_ptr(ptr);
+  /* touch strlen may rise an error */
+  // check_ptr(ptr+strlen(ptr));
+  
+  /* check by byte if there is an end */
+  for(char* i=ptr;;i++){
+    check_ptr(i);
+    if(*i == '\0'){
+      return true;
+    }
+  }
 }
 
 void
