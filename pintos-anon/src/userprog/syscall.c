@@ -50,6 +50,11 @@ bool check_ptr_length(char *ptr, int length){
   return true;
 }
 
+/* check char pointer is valid first */
+bool check_ptr_char(char *ptr){
+  check_ptr(ptr);
+  check_ptr(ptr+strlen(ptr)-1);
+}
 
 void
 syscall_init (void) 
@@ -129,8 +134,7 @@ _exit_(int status){
 
 static pid_t
 _exec_(const char *cmd_line){
-  check_ptr_length(cmd_line,strlen(cmd_line)+1);
-
+  check_ptr_char(cmd_line);
   return process_execute(cmd_line);
 }
 
@@ -141,19 +145,19 @@ _wait_(pid_t pid){
 
 static bool
 _create_(const char *file, unsigned initial_size){
-  check_ptr_length(file,strlen(file)+1);
+  check_ptr_char(file);
   return(filesys_create(file,initial_size));
 }
 
 static bool
 _remove_ (const char *file){
-  check_ptr_length(file,strlen(file)+1);
+  check_ptr_char(file);
   return(filesys_remove(file));
 }
 
 static int
 _open_ (const char *file){
-  check_ptr_length(file,strlen(file)+1);
+  check_ptr_char(file);
 
   int fd;
   struct thread *cur = thread_current();
@@ -167,14 +171,12 @@ _open_ (const char *file){
   }
 
   /* Put the file into the thread */
-  if (cur->file_use[cur->fd_suggest] == NULL){
-    cur->file_use[cur->fd_suggest] = curfile;
-    fd = cur->fd_suggest;
-    /* Find next suitable fd; we don't use 0,1 */
-    for(cur->fd_suggest = 2;
-        cur->fd_suggest < 130 && cur->file_use[cur->fd_suggest] != NULL;
-        cur->fd_suggest++);
-  }
+  /* Find next suitable fd; we don't use 0,1 */
+  for(cur->fd_suggest = 2;
+      cur->fd_suggest < 130 && cur->file_use[cur->fd_suggest] != NULL;
+      cur->fd_suggest++);
+  cur->file_use[cur->fd_suggest] = curfile;
+  fd = cur->fd_suggest;
 
   return fd;
 }
@@ -182,6 +184,7 @@ _open_ (const char *file){
 static int
 _filesize_ (int fd){
   if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
+  if(fd < 0 || fd > 129) _exit_(-1);
 
   /* Get the target file */
   struct file *curfile = thread_current()->file_use[fd];
@@ -194,14 +197,15 @@ _filesize_ (int fd){
 static int
 _read_ (int fd, void *buffer, unsigned size){
   if(fd == STDOUT_FILENO) _exit_(-1);
-  
+  if(fd < 0 || fd > 129) _exit_(-1);
+
   /* check every buffer page validity */
   for(void *ptr=buffer; ptr<buffer+size; ptr+=PGSIZE){
     check_ptr(ptr);
   }
 
   int res = 0;
-  
+
   if (size == 0){
     return 0;
   }else if(fd == STDIN_FILENO){
@@ -223,6 +227,7 @@ _read_ (int fd, void *buffer, unsigned size){
 static int
 _write_ (int fd, const void *buffer, unsigned size){
   if(fd == STDIN_FILENO) _exit_(-1);
+  if(fd < 0 || fd > 129) _exit_(-1);
 
   for(void *ptr=buffer; ptr<buffer+size; ptr+=PGSIZE){
     check_ptr(ptr);
@@ -244,6 +249,7 @@ _write_ (int fd, const void *buffer, unsigned size){
 static void
 _seek_ (int fd, unsigned position){
   // if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
+  if(fd < 0 || fd > 129) _exit_(-1);
 
   /* Get the target file */
   struct file *curfile = thread_current()->file_use[fd];
@@ -258,6 +264,7 @@ _seek_ (int fd, unsigned position){
 static unsigned
 _tell_ (int fd){
   // if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
+  if(fd < 0 || fd > 129) _exit_(-1);
 
   /* Get the target file */
   struct file *curfile = thread_current()->file_use[fd];
@@ -269,6 +276,7 @@ _tell_ (int fd){
 static void
 _close_ (int fd){
   if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
+  if(fd < 0 || fd > 129) _exit_(-1);
 
   struct thread *cur = thread_current();
 
