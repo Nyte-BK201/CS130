@@ -475,6 +475,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->fd_suggest = 0;
   t->magic = THREAD_MAGIC;
 
+  /* ============================ project 2 ============================= */
+  lock_init(&t->child_list_lock);
+
+  for(int i=0;i<130;i++){
+    t->file_use[i] = NULL;
+  }
+
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, thread_priority_large_func, NULL);
   intr_set_level (old_level);

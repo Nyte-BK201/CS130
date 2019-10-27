@@ -185,11 +185,7 @@ _filesize_ (int fd){
 
   /* Get the target file */
   struct file *curfile = thread_current()->file_use[fd];
-
-  /* Check if the file is opened */
-  if (!curfile){
-    return -1;
-  }
+  if(curfile == NULL) _exit_(-1);
 
   /* Calculate the size */
   return (file_length(curfile));
@@ -198,21 +194,50 @@ _filesize_ (int fd){
 static int
 _read_ (int fd, void *buffer, unsigned size){
   if(fd == STDOUT_FILENO) _exit_(-1);
-  check_ptr_length(buffer,size);
-
-  struct file *curfile = thread_current()->file_use[fd];
-
   
+  /* check every buffer page validity */
+  for(void *ptr=buffer; ptr<buffer+size; ptr+=PGSIZE){
+    check_ptr(ptr);
+  }
+
+  int res = 0;
+  
+  if (size == 0){
+    return 0;
+  }else if(fd == STDIN_FILENO){
+    char *buf = (char *)buffer;
+    for(int i=0; i<size; i++){
+      buf[i] = input_putc();
+      res++;
+    }
+  }else{
+    struct file *curfile = thread_current()->file_use[fd];
+    if(curfile == NULL) _exit_(-1);
+
+    res = file_read(curfile, buffer, size);
+  }
+
+  return res;
 }
 
 static int
 _write_ (int fd, const void *buffer, unsigned size){
   if(fd == STDIN_FILENO) _exit_(-1);
-  check_ptr_length(buffer,size);
 
-  if(fd == STDOUT_FILENO){
+  for(void *ptr=buffer; ptr<buffer+size; ptr+=PGSIZE){
+    check_ptr(ptr);
+  }
+
+  if (size == 0){
+    return 0;
+  }else if(fd == STDOUT_FILENO){
     putbuf(buffer,size);
     return size;
+  }else{
+    struct file *curfile = thread_current()->file_use[fd];
+    if(curfile == NULL) _exit_(-1);
+
+    return file_write(curfile, buffer, size);
   }
 }
 
@@ -222,6 +247,7 @@ _seek_ (int fd, unsigned position){
 
   /* Get the target file */
   struct file *curfile = thread_current()->file_use[fd];
+  if(curfile == NULL) _exit_(-1);
 
   /* seek */
   if (curfile){
@@ -235,11 +261,7 @@ _tell_ (int fd){
 
   /* Get the target file */
   struct file *curfile = thread_current()->file_use[fd];
-
-  /* Check if the file is opened */
-  if (!curfile){
-    return -1;
-  }
+  if(curfile == NULL) _exit_(-1);
 
   return file_tell(curfile);
 }
@@ -252,11 +274,7 @@ _close_ (int fd){
 
   /* Get the target file */
   struct file *curfile = cur->file_use[fd];
-
-  /* Check if the file is opened */
-  if (!curfile){
-    return -1;
-  }
+  if(curfile == NULL) _exit_(-1);
 
   /* Close the file and remove from the thread */
   file_close(curfile);
