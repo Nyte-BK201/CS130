@@ -82,7 +82,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = _exec_(*(sp + 1)); 
   }else if(call == SYS_WAIT){
     check_ptr_length(sp+1,4);
-    _wait_(*(sp+1));
+    f->eax = _wait_(*(sp+1));
   }else if(call == SYS_CREATE){
     check_ptr_length(sp+1,4);
     check_ptr_length(sp+2,4);

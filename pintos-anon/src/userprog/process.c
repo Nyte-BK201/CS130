@@ -108,9 +108,12 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* copy file_name for a bug i can not fix */
+  char cmdline[strlen(file_name)+1];
+  strlcpy(cmdline, file_name, strlen (file_name)+1);
   /* slpit file_name from cmd */
   char *save_ptr = NULL;
-  char *thread_name = strtok_r(file_name," ", &save_ptr);
+  char *thread_name = strtok_r(cmdline," ", &save_ptr);
 
   /* initialized arguments to execute */
   struct process_load_arg load_arg;
@@ -164,8 +167,8 @@ start_process (void *aux)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   /* make a copy to argument_passing */
-    char cmdline[strlen(file_name)+1];
-    strlcpy(cmdline, file_name, strlen (file_name)+1);
+  char cmdline[strlen(file_name)+1];
+  strlcpy(cmdline, file_name, strlen (file_name)+1);
 
   /* slpit file_name from cmd */
   char *save_ptr = NULL;
@@ -196,8 +199,10 @@ start_process (void *aux)
   sema_up(&load_arg->sema);
 
   /* If load failed, quit. */
-  if (!load_arg->success) 
+  if (!load_success || !load_arg->success)  {
+    thread_current ()->ret = -1;
     thread_exit ();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -232,16 +237,16 @@ process_wait (tid_t child_tid UNUSED)
                           list_entry(e,struct wait_status, elem);
         /* find child with given pid */
         if(child_status->child_pid == child_tid){
+
+          lock_release(&cur->child_list_lock);
           if(child_status->child_alive){
             /* child alive, wait until terminate */
-            lock_release(&cur->child_list_lock);
             sema_down(&child_status->sema);
-            return child_status->child_ret;
-          }else{
-            /* dead, return directly */
-            lock_release(&cur->child_list_lock);
-            return child_status->child_ret;
           }
+          int ret = child_status->child_ret;
+          list_remove(e);
+          free(child_status);
+          return ret;
         }
       }
   lock_release(&cur->child_list_lock);
@@ -261,12 +266,12 @@ process_exit (void)
   lock_acquire(&cur->child_list_lock);
   for(struct list_elem *e = list_begin(&cur->child_list);
       e != list_end(&cur->child_list);
-      e = list_next(e)){
+      e = list_next (e)){
         struct wait_status *child_status = 
                           list_entry(e,struct wait_status, elem);
         /* find dead child */
         if(!child_status->child_alive){
-          list_remove(&child_status->elem);
+          list_remove(e);
           free(child_status);
         }else{
           /* mark parent as dead to notice child to clean up */

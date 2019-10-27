@@ -478,7 +478,7 @@ init_thread (struct thread *t, const char *name, int priority)
   /* ============================ project 2 ============================= */
   list_init(&t->child_list);
   lock_init(&t->child_list_lock);
-
+  t->status_as_child = NULL;
   for(int i=0;i<130;i++){
     t->file_use[i] = NULL;
   }
