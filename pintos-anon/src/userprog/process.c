@@ -234,10 +234,12 @@ process_wait (tid_t child_tid UNUSED)
         if(child_status->child_pid == child_tid){
           if(child_status->child_alive){
             /* child alive, wait until terminate */
+            lock_release(&cur->child_list_lock);
             sema_down(&child_status->sema);
             return child_status->child_ret;
           }else{
             /* dead, return directly */
+            lock_release(&cur->child_list_lock);
             return child_status->child_ret;
           }
         }
