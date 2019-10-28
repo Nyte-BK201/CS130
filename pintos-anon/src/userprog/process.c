@@ -285,7 +285,14 @@ process_exit (void)
     lock_acquire(cur->status_as_child->child_list_lock);
     /* free the thread as child if parent is dead */
     if(!cur->status_as_child->parent_alive){
-      list_remove(&cur->status_as_child->elem);
+
+      /* the step here may have problems since child_list may be destoryed
+        already; It seems like we can ignore the list node because parent 
+        already exited */
+      if(cur->status_as_child->elem.next != NULL && 
+         cur->status_as_child->elem.prev != NULL)
+        list_remove(&cur->status_as_child->elem);
+
       free(cur->status_as_child);
     }else{
       /* parent is alive; mark dead and save exit code then wake up in case 

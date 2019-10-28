@@ -1,0 +1,362 @@
+		     +--------------------------+
+         | CS 140	                  |
+		     | PROJECT 2: USER PROGRAMS	|
+		     | DESIGN DOCUMENT        	|
+		     +--------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Zhongyue Lin <linzhy@shanghaitech.edu.cn>
+Mengyin Wu <wumy1@shanghaitech.edu.cn>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+Pintos Guide by Stephen Tsung-Han Sher:
+    https://static1.squarespace.com/static/5b18aa0955b02c1de94e4412/t/
+    5b85fad2f950b7b16b7a2ed6/1535507195196/Pintos+Guide
+
+			   ARGUMENT PASSING
+			   ================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+userprog/process.c:
+/* struct use to convey info between parent and child */
+struct process_load_arg{
+  struct semaphore sema;  /* sync */
+  char *cmdline;          /* cmdline */
+  bool success;           /* is child loaded successful */
+  struct wait_status *status_as_child; /* node in child list */
+};
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe how you implemented argument parsing.  How do
+>> you arrange for the elements of argv[] to be in the right order?
+>> How do you avoid overflowing the stack page?
+
+I implement a function argument_pass() to setup the stack after confirming
+load() is successful. I insert args from left to right to stack since strtok_r
+slpit out args in this order and save each pointer in argv[].
+
+After alignment and null pointer, insert pointers in argv[] in reverse order 
+to stack.
+
+I precalculate overhead of null pointer、 argc and other overhead. When 
+inserting args, calculate the arg itself and its pointer's memory usage to check
+whether they overflow the page in later steps. Also a args number limitation of 
+128 is imposed.
+
+---- RATIONALE ----
+
+>> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+strtok() share a built-in "save_ptr" which is unsafe when os is switching from
+threads to threads. strtok_r() uses a thread's own save_ptr to ensure
+correctness.
+
+>> A4: In Pintos, the kernel separates commands into a executable name
+>> and arguments.  In Unix-like systems, the shell does this
+>> separation.  Identify at least two advantages of the Unix approach.
+
+Shell is a user program(user mode) so separating args in shell may prevent 
+potential evil command to damage the system. To be specific, testing very side 
+of args passing in kernel(kernel mode) to ensure robustness and safety fail 
+after a lot effects.
+
+Also shell allows shortcut of paths、relative paths and can be updated easily 
+without compiling the whole kernel if we want more features which meets the 
+modularity requirement.
+
+			     SYSTEM CALLS
+			     ============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+threads/thread.h:
+struct thread{
+    ...
+    /* exit code when a user process terminates */
+    int ret;
+    /* store files open in this thread; limit to 128, but we don't use 0,1 */
+    struct file *file_use[130];
+    /* a suggested fd, record the smallest spare fd */
+    int fd_suggest;
+
+    /* children's status list, every node is held by both parent and child
+      act as parent in this list */
+    struct list child_list;
+    struct lock child_list_lock; /* the same lock in every node */
+    /* act as child in this status node */
+    struct wait_status *status_as_child;
+
+    struct file *process_exec_file; /* this process's exec file */
+};
+
+/* data race inside sturct since it is shared by parent and child;
+  be careful, we need to use lock to sync */
+struct wait_status{
+  /* if child/ parent is alive; edit by a thread itself */
+  bool child_alive;
+  bool parent_alive;
+  int child_pid;  /* child's pid */
+  struct semaphore sema;  /* sema to wake up syscall wait */
+  int child_ret;  /* exit status of child */
+  struct list_elem elem;  /* list elem for child_list */
+  /* sync child_list is mutual exclusive; same lock in every node */
+  struct lock *child_list_lock; 
+};
+
+
+>> B2: Describe how file descriptors are associated with open files.
+>> Are file descriptors unique within the entire OS or just within a
+>> single process?
+
+Fd is an index shorthand for struct file* . OS handles the file logic behind and
+provides a very simple interface fd(which is an int) to use file features.
+
+Fd is unique within a single process. In my implementation, fd index from 2-130
+and trys to reuse the very front spared index if the original owner file is 
+closed.
+
+---- ALGORITHMS ----
+
+>> B3: Describe your code for reading and writing user data from the
+>> kernel.
+
+A: check every input args pointer with check_ptr_length(). The function checks
+if pointer's head and tail are both valid(in user address, and mapped).
+
+B: check every char *ptr with check_ptr_char(). The functions assume the pointer
+is invalid with no termination('\0'). It checks byte by byte if the current byte
+is a valid address until it meets '\0'. If one byte fails check, the process is
+terminated.
+
+C: check every void *buffer page by page using check_ptr() that every page 
+in the buffer's range should be valid.
+
+>> B4: Suppose a system call causes a full page (4,096 bytes) of data
+>> to be copied from user space into the kernel.  What is the least
+>> and the greatest possible number of inspections of the page table
+>> (e.g. calls to pagedir_get_page()) that might result?  What about
+>> for a system call that only copies 2 bytes of data?  Is there room
+>> for improvement in these numbers, and how much?
+
+The least number is 1 when the data stays in one full page precisely.
+The greatest number is 2 when data stays across two pages(which is highly 
+possible) and we need to check both its head and tail address is valid and both
+two pages are mapped.
+
+2 bytes of data is the same. In large probability is it stays in the same page,
+but there is possibility that one byte stays in the first page and the second 
+is in the next page. In this case we should still check twice to ensure safety.
+
+The improvement could be handling the rare bounding case in exception to use 
+hardware which is much faster than checking page by page. However, the mechanism
+can be a bit complex so I choose to ease the worklord by verifying page by page.
+
+>> B5: Briefly describe your implementation of the "wait" system call
+>> and how it interacts with process termination.
+
+Each thread acts two roles:
+Parent: holds a child_list with every node for a child process, acts as parent
+Child: holds a status_as_child whihc is a node in parent's child_list
+
+The node is struct wait_status consisting of parent/child alive status, child
+exit code, a semaphore to communicate between parent and child, child_pid, 
+a lock to sync the list. The lock is use to both 
+    1) ensure sync inside a single node that read  /write status will not have 
+    data race 
+    2) ensure remove/ insert a node to list will not have data race. 
+Although there may be a lot of children in a list, but the lock is only acquired
+ in 
+    1) child process generation 
+    2) parent/ child process exit 
+And critical section is quite short so there will not be a performance issue.
+
+Each node is malloc by parent when generating a child, and pass it to child.
+When a node exit, it checks 
+    A: tranverse child_list, if there is child already exit(child_alive ==
+     false), free it; otherwise mark parent_alive = false
+    B: check status_as_child, if the parent exits(parent_alive == false), free
+     it; otherwise mark child_alive = false and save exit code in child_ret
+In this way, resources are managed without leakage.
+
+When parent called wait(pid), process_wait() tranverse the child_list to find 
+a matched pid child:
+    1) If not found, return -1(no such child or already waited);
+    2) If found, check child_alive; if alive, then sema_down to wait it exits;
+        otherwise, return child_ret. In both cases, we remove the child from 
+        list and free it to note the parent already waited once.
+
+>> B6: Any access to user program memory at a user-specified address
+>> can fail due to a bad pointer value.  Such accesses must cause the
+>> process to be terminated.  System calls are fraught with such
+>> accesses, e.g. a "write" system call requires reading the system
+>> call number from the user stack, then each of the call's three
+>> arguments, then an arbitrary amount of user memory, and any of
+>> these can fail at any point.  This poses a design and
+>> error-handling problem: how do you best avoid obscuring the primary
+>> function of code in a morass of error-handling?  Furthermore, when
+>> an error is detected, how do you ensure that all temporarily
+>> allocated resources (locks, buffers, etc.) are freed?  In a few
+>> paragraphs, describe the strategy or strategies you adopted for
+>> managing these issues.  Give an example.
+
+I develop case oriented functions to deal with different syscall arguments.
+
+A: check every input args pointer with check_ptr_length(). The function checks
+if pointer's head and tail are both valid(in user address, and mapped).
+
+B: check every char *ptr with check_ptr_char(). The functions assume the pointer
+is invalid with no termination('\0'). It checks byte by byte if the current byte
+is a valid address until it meets '\0'. If one byte fails check, the process is
+terminated.
+
+C: check every void *buffer page by page using check_ptr() that every page 
+in the buffer's range should be valid.
+
+D: check fd is valid in syscall difference such as disabling write to STDIN. 
+    check fd is in 2-130 range and that fd is not NULL in file_use[].
+
+Since every kind of access is with a detailed handling, the modularity is 
+ensured and if there is more syscall to extended, we just match the input with 
+the case which is quite simple and elegant.
+
+I implement process_exit() with detailed check and resources release.
+
+1) check child_list as a parent role with details in last question
+2) check status_as_child as child role with details in last question
+3) tranverse file_use to close every non-closed files(including process's exec
+    file itself)
+4) destory page malloc to the thread after everything is cleaned up
+
+In the progress, we ensure every lock_acquire is matched with release when 
+manipulating list or list node.
+
+For example, when exec() is called, we use strategy A/B to check args. If one of
+the checking fails, the process is terminated with exit() and procedures 
+1) 2) 3) 4) are executed by orders to clean up everything.
+
+
+---- SYNCHRONIZATION ----
+
+>> B7: The "exec" system call returns -1 if loading the new executable
+>> fails, so it cannot return before the new executable has completed
+>> loading.  How does your code ensure this?  How is the load
+>> success/failure status passed back to the thread that calls "exec"?
+
+I edit the arguments when calling thread_create(). The former argument fn_copy 
+is now contained in the struct process_load_arg with a sema and success to 
+sync and notice parent if the load is successful.
+
+After parent calls thread_create(), it calls sema_down() to wait for the child 
+process loading completes. When child executes start_process and the loading is
+completed with load() and argument_pass(), it conveys success and sema_up() to 
+wake up parent.
+
+>> B8: Consider parent process P with child process C.  How do you
+>> ensure proper synchronization and avoid race conditions when P
+>> calls wait(C) before C exits?  After C exits?  How do you ensure
+>> that all resources are freed in each case?  How about when P
+>> terminates without waiting, before C exits?  After C exits?  Are
+>> there any special cases?
+
+Wait() mechanism is described in details in B5.
+I impose a lock_acquire() if any thread want to read/write wait_status node 
+no matter it is status_as_child or a node in child_list. So the race condition
+is avoided. 
+
+A node is ensured to be freed:
+    1) by parent if that node's child is dead
+    2) by child if that node's parent is dead
+
+Before C exits:
+    P tranverse the child_list and find pid to match C. P checks C is alive,
+    so that P calls sema_down() until C exits to wake parent up.
+After C exits:
+    P tranverse the child_list and find pid to match C. P checks C is dead,
+    so that P returns child_ret.
+In both cases we remove the child from child_list since P has waited C once.
+
+P exit without waiting before C exits:
+    C will free the node when C exits
+P exit without waiting after C exits:
+    P checks C is dead and free the node
+
+No special cases.
+
+---- RATIONALE ----
+
+>> B9: Why did you choose to implement access to user memory from the
+>> kernel in the way that you did?
+
+It is quite strghtforward and intuitive to separate different args with 
+different checkings. The advantage is that it is elegant to extend new syscall 
+and manage checking method.
+
+>> B10: What advantages or disadvantages can you see to your design
+>> for file descriptors?
+
+Advantage:
+    O(1) to check if the arg fd is valid(is opened in this process) or not.
+    Simple code without memory management.
+    Elegant in manage fd(allocate with increasing order strictly)
+
+Disadvantage:
+    Take up 130*4 bytes in thread stack, it can be a huge problem in real OS but
+        it is quite suitable since pintos's thread stack doesn't have that many 
+        args to consume memory
+    Finding a spared fd may take time if a process holds many files
+
+Neural:
+    A limitation with 128 fd. Can be useful if we want to limit process file 
+        opening; can be a disadvantage if we do not want to limit it.
+
+>> B11: The default tid_t to pid_t mapping is the identity mapping.
+>> If you changed it, what advantages are there to your approach?
+
+I do not change the mapping since pintos doesn't have multithreads within once 
+process. If we want to implement multithreads supporting, we should come up with
+a new mapping.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

@@ -114,7 +114,7 @@ struct thread
     /* act as child in this status node */
     struct wait_status *status_as_child;
 
-    struct file *process_exec_file;
+    struct file *process_exec_file; /* this process's exec file */
     
 
 #ifdef USERPROG
