@@ -32,7 +32,8 @@ static void real_time_delay (int64_t num, int32_t denom);
 
 static struct list alarm_list;
 /* return true if a's wake_up_time < b's */
-bool alarm_less_func (const struct list_elem *a, const struct list_elem *b, void *aux){
+bool alarm_less_func (const struct list_elem *a, 
+                      const struct list_elem *b, void *aux){
   struct thread *thread_a = list_entry(a, struct thread, alarm_elem);
   struct thread *thread_b = list_entry(b, struct thread, alarm_elem);
   return thread_a->wake_up_time<thread_b->wake_up_time;
@@ -195,7 +196,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
   
   /* check if thread sleep enough */
   while(!list_empty(&alarm_list)){
-    struct thread *head = list_entry(list_front(&alarm_list),struct thread, alarm_elem);
+    struct thread *head = list_entry(list_front(&alarm_list),
+                                      struct thread, alarm_elem);
     /* head is still sleeping */
     if(head->wake_up_time > ticks){
       break;
