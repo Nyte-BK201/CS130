@@ -3,12 +3,13 @@
 
 #include "threads/thread.h"
 #include <list.h>
+#include "lib/kernel/list.h"
 
 struct frame_table_entry
 {
-    void *frame;
-    struct thread *thread;
-    struct list_elem elem;
+  void *frame;
+  struct thread *thread;
+  struct list_elem elem;
 };
 
 void frame_init(void);

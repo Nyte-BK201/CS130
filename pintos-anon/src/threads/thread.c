@@ -13,6 +13,8 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -100,6 +102,9 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+
+  // Set up the frame table.
+  frame_init();
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -484,6 +489,9 @@ init_thread (struct thread *t, const char *name, int priority)
   for(int i=0;i<130;i++){
     t->file_use[i] = NULL;
   }
+
+  /* ============================ project 3 ============================= */
+  page_table_init(&t->sup_page_table);
 
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, 

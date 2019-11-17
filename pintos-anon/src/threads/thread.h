@@ -115,7 +115,9 @@ struct thread
     struct wait_status *status_as_child;
 
     struct file *process_exec_file; /* this process's exec file */
-    
+
+    /* =========================== project 3 =============================== */
+    struct list sup_page_table;         /* Supplementary page table */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
