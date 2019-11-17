@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <hash.h>
 #include "threads/synch.h"
 #include "threads/malloc.h"
 
@@ -117,7 +118,7 @@ struct thread
     struct file *process_exec_file; /* this process's exec file */
 
     /* =========================== project 3 =============================== */
-    struct list sup_page_table;         /* Supplementary page table */
+    struct hash sup_page_table;         /* Supplementary page table */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

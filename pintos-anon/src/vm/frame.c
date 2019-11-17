@@ -7,7 +7,8 @@ static struct list frame_table;
 // Lock to synchronize on frame table.
 static struct lock frame_lock;
 
-void frame_init(void)
+void
+frame_init(void)
 {
   lock_init(&frame_lock);
   list_init(&frame_table);
@@ -15,7 +16,8 @@ void frame_init(void)
 
 /* Allocate a page from USER_POOL, and add to frame_table. 
    Return the newly allocated frame. */
-void *frame_allocate(enum palloc_flags flags)
+void
+*frame_allocate(enum palloc_flags flags)
 {
   void *frame = NULL;
 
@@ -24,7 +26,7 @@ void *frame_allocate(enum palloc_flags flags)
   }
   frame = palloc_get_page(flags);
 
-  if(frame){
+  if(frame != NULL){
     frame_add(frame);
   }else{
     // Fail to allocate a page, evict a frame from frame_table.
@@ -35,7 +37,8 @@ void *frame_allocate(enum palloc_flags flags)
 }
 
 // Free the given frame and remove it from frame_table.
-void frame_free(void *frame)
+void
+frame_free(void *frame)
 {
   lock_acquire(&frame_lock);
 
@@ -43,7 +46,8 @@ void frame_free(void *frame)
   for (struct list_elem *e = list_begin(&frame_table);
     e != list_end(&frame_table);
     e = list_next(e)){
-    struct frame_table_entry *frame_temp = list_entry(e, struct frame_table_entry, elem);
+    struct frame_table_entry *frame_temp = list_entry(e,
+                                               struct frame_table_entry, elem);
 
     if (frame_temp->frame == frame){
       list_remove(e);
@@ -57,7 +61,8 @@ void frame_free(void *frame)
 }
 
 // Add the given frame into frame_table.
-void frame_add(void *frame)
+void
+frame_add(void *frame)
 {
   struct frame_table_entry *f = malloc(sizeof(struct frame_table_entry));
   f->frame = frame;
@@ -70,7 +75,8 @@ void frame_add(void *frame)
 
 /* Choose a frame to evict from the frame_table. 
    Implement a global page replacement algorithm that approximates LRU. */
-void *frame_evict(void)
+void
+*frame_evict(void)
 {
 
 }
