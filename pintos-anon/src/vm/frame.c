@@ -16,8 +16,8 @@ frame_init(void)
 
 /* Allocate a page from USER_POOL, and add to frame_table. 
    Return the newly allocated frame. */
-void
-*frame_allocate(enum palloc_flags flags)
+void*
+frame_allocate(enum palloc_flags flags)
 {
   void *frame = NULL;
 
@@ -75,8 +75,8 @@ frame_add(void *frame)
 
 /* Choose a frame to evict from the frame_table. 
    Implement a global page replacement algorithm that approximates LRU. */
-void
-*frame_evict(void)
+void*
+frame_evict(void)
 {
 
 }

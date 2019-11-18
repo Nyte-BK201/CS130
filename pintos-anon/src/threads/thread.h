@@ -117,7 +117,7 @@ struct thread
 
     struct file *process_exec_file; /* this process's exec file */
 
-    /* =========================== project 3 =============================== */
+/* =========================== project 3 =============================== */
     struct hash sup_page_table;         /* Supplementary page table */
 
 #ifdef USERPROG

@@ -61,6 +61,9 @@ page_add(void *user_vaddr)
 {
   struct thread *cur_thread = thread_current();
   struct sup_page_table_entry *sup_pt_entry = malloc(sizeof(struct sup_page_table_entry));
+
+  if(!sup_pt_entry) return false;
+
   sup_pt_entry->user_vaddr = user_vaddr;
   sup_pt_entry->access_time = timer_ticks();
   sup_pt_entry->accessed = false;
