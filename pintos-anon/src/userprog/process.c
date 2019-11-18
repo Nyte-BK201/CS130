@@ -614,8 +614,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  struct thread *cur = thread_current ();
-  page_table_init(&cur->sup_page_table);
+  // struct thread *cur = thread_current ();
+  // page_table_init(&cur->sup_page_table);
 
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
