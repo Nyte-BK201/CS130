@@ -11,6 +11,7 @@ struct sup_page_table_entry
   uint64_t access_time;
   bool dirty;
   bool accessed;
+  bool read_only;
   struct hash_elem elem; /* hash elem for hash table */
 };
 
