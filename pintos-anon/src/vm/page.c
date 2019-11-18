@@ -36,7 +36,6 @@ void
 page_table_free(struct hash *sup_page_table)
 {
   hash_destroy(sup_page_table, page_destroy_func);
-  free(sup_page_table);
 }
 
 // Get a supplymentary page table entry by the given user virtual address.

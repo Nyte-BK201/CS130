@@ -319,11 +319,8 @@ process_exit (void)
     file_close(cur->process_exec_file);
   }
 
-  /* D: destroy page table */
-  page_table_free(cur->sup_page_table);
-  cur->sup_page_table = NULL;
 
-  /* E: destory page allocated */
+  /* D: destory page allocated */
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

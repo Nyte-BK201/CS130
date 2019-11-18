@@ -295,6 +295,10 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
+  // kernel thread should not have page table
+  if (list_size(&all_list) > 1)
+    page_table_free(&(thread_current()->sup_page_table));
+
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -491,7 +495,10 @@ init_thread (struct thread *t, const char *name, int priority)
   }
 
   /* ============================ project 3 ============================= */
-  page_table_init(&t->sup_page_table);
+  // kernel thread should not have page table
+  if (list_size(&all_list) != 0){
+    page_table_init(&t->sup_page_table);
+  }
 
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, 
