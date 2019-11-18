@@ -652,12 +652,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       */
 
       /* new implementation: load lazily */
-      struct sup_page_table_entry *sup_entry =
-                                    (struct sup_page_table_entry*)
-                                    malloc(sizeof(struct sup_page_table_entry));
-      if(!sup_entry)return false;
-
-      if(!page_add(sup_entry))return false;
+      if(!page_add(upage))return false;
 
       /* Advance. */
       read_bytes -= page_read_bytes;
