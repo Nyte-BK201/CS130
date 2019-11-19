@@ -6,8 +6,8 @@
 #include "lib/kernel/hash.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
-#include "devices/block.h"
 #include "filesys/file.h"
+#include "vm/frame.h"
 
 struct sup_page_table_entry
 {
@@ -15,7 +15,7 @@ struct sup_page_table_entry
   uint64_t access_time;
   bool dirty;
   bool accessed;
-  bool read_only;
+  bool writable;
   struct file *file;
   off_t offset;
   uint32_t read_bytes;
@@ -32,6 +32,5 @@ bool page_add(void *user_vaddr, struct sup_page_table_entry **retval,
               uint32_t zero_bytes, bool writable);
 bool page_fault_handler(bool, bool, bool, void *, void *);
 bool vaddr_invalid_check(void *, void *);
-bool grow_stack(void *);
 
 #endif /* vm/page.h */

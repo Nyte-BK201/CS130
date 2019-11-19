@@ -1,12 +1,7 @@
 #include "vm/page.h"
 #include <string.h>
-#include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/timer.h"
-#include "lib/kernel/hash.h"
-#include "userprog/pagedir.h"
-#include "threads/palloc.h"
-#include "vm/frame.h"
 
 static unsigned
 page_hash_func(const struct hash_elem *e, void *aux UNUSED)
@@ -46,7 +41,9 @@ page_table_free(struct hash *sup_page_table)
   hash_destroy(sup_page_table, page_destroy_func);
 }
 
-// Get a supplymentary page table entry by the given user virtual address.
+/* Get a supplymentary page table entry by the given user virtual address.
+    Return NULL if not in page_table
+    */
 struct sup_page_table_entry *
 get_page_table_entry(void *user_vaddr)
 {
@@ -81,7 +78,7 @@ bool page_add(void *user_vaddr, struct sup_page_table_entry **retval,
   sup_pt_entry->zero_bytes = zero_bytes;
   sup_pt_entry->offset = ofs;
   sup_pt_entry->kpage = NULL;
-  sup_pt_entry->read_only = !writable;
+  sup_pt_entry->writable = writable;
 
   // Transmit the newed supplymentary page out. Used by grow_stack().
   if (retval){
@@ -104,24 +101,32 @@ bool page_add(void *user_vaddr, struct sup_page_table_entry **retval,
 bool
 page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, void *esp)
 {
-  bool success = true; /* True: proceed as normal, false: the process should be killed */
+    // invalid address 
+    if (!user || vaddr_invalid_check(fault_addr, esp) || !not_present){
+        return false;
+    }
 
-  if (!user || vaddr_invalid_check(fault_addr, esp) || !not_present){
-    success = false;
-    }else{
-
-      struct sup_page_table_entry *sup_pt_entry = get_page_table_entry(fault_addr);
-      if (sup_pt_entry == NULL){
+    struct sup_page_table_entry *sup_pt_entry = get_page_table_entry(fault_addr);
+    // A: a page fault with an address not in the virtual page table
+    if (sup_pt_entry == NULL){
         if (fault_addr < (esp - 32)){
-          // An address that does not appear to be a stack access.
-          success = false;
+            /* A1: Invalid address usage.
+                An address that does not appear to be a stack access.
+                */
+            return false;
         }else{
-          success = grow_stack(pg_round_down(fault_addr));
+            /* A2: valid. Try stack growth and return */
+            sup_pt_entry = new struct
+            return grow_stack(pg_round_down(fault_addr), sup_pt_entry);
         }
-      }else{
 
-        // Allocate a frame and read the file into it.
-        void *new_frame = frame_allocate(PAL_USER);
+    // B: a page fault with an address in the virtual page table but evicted
+    }else{
+        /* B1: lazy load. The frame is evicted but not in disk.
+            We allocate a frame and read the file into it again.
+            */
+        if(sup_pt_entry->file){}
+        void *new_frame = frame_allocate(PAL_USER, sup_pt_entry);
         sup_pt_entry->file = file_reopen(sup_pt_entry->file);
         file_read_at(sup_pt_entry->file, new_frame, sup_pt_entry->read_bytes, sup_pt_entry->offset);
 
@@ -133,11 +138,14 @@ page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, vo
 
         // Install page. install_page() in process.c is static.
         pagedir_get_page(thread_current()->pagedir, sup_pt_entry->user_vaddr);
-        pagedir_set_page(thread_current()->pagedir, sup_pt_entry->user_vaddr, sup_pt_entry->kpage, !sup_pt_entry->read_only);
-    }
-  }
-  return success;
+        pagedir_set_page(thread_current()->pagedir, sup_pt_entry->user_vaddr, sup_pt_entry->kpage, sup_pt_entry->writable);
+        return true;
 
+        /* B2: swapped. A modified page in the disk, we should swap it back */
+    }
+  
+    // situation not matched to any of the above kinds
+    return false;
 }
 
 /* Check if a virtual address is invalid when a page fault occurs.
@@ -153,9 +161,9 @@ vaddr_invalid_check(void *fault_addr, void *esp)
 
 // Give more memory (one page) to the user. Return true if success.
 bool
-grow_stack(void *user_vaddr)
+grow_stack(void *user_vaddr, struct sup_page_table_entry *spte)
 {
-  void *new_frame = frame_allocate(PAL_ZERO | PAL_USER);
+  void *new_frame = frame_allocate(PAL_ZERO | PAL_USER, spte);
 
   /* Make it possible to get the new page from page_add() 
      since the function returns a bool value. */

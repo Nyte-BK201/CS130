@@ -1,4 +1,3 @@
-#include "threads/palloc.h"
 #include "vm/frame.h"
 
 // List of all frames.
@@ -17,7 +16,7 @@ frame_init(void)
 /* Allocate a page from USER_POOL, and add to frame_table. 
    Return the newly allocated frame. */
 void*
-frame_allocate(enum palloc_flags flags)
+frame_allocate(enum palloc_flags flags, struct sup_page_table_entry *spte)
 {
   void *frame = NULL;
 
@@ -27,10 +26,14 @@ frame_allocate(enum palloc_flags flags)
   frame = palloc_get_page(flags);
 
   if(frame != NULL){
-    frame_add(frame);
+    frame_add(frame,spte);
   }else{
     // Fail to allocate a page, evict a frame from frame_table.
     frame_evict();
+
+    frame = palloc_get_page(flags);
+    if(frame == NULL) PANIC("Virtual memory: frame full, evict failed!\n");
+    frame_add(frame,spte);
   }
 
   return frame;
@@ -62,11 +65,12 @@ frame_free(void *frame)
 
 // Add the given frame into frame_table.
 void
-frame_add(void *frame)
+frame_add(void *frame, struct sup_page_table_entry *spte)
 {
   struct frame_table_entry *f = malloc(sizeof(struct frame_table_entry));
   f->frame = frame;
-  f->thread = thread_current();
+  // f->thread = thread_current();
+  f->spte = spte;
   f->swap_bitmap_index = -1;
 
   lock_acquire(&frame_lock);
@@ -76,8 +80,11 @@ frame_add(void *frame)
 
 /* Choose a frame to evict from the frame_table. 
    Implement a global page replacement algorithm that approximates LRU. */
-void*
+void
 frame_evict(void)
 {
+  lock_acquire(&frame_lock);
+  
 
+  lock_release(&frame_lock);
 }
