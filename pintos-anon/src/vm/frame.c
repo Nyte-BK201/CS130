@@ -67,6 +67,7 @@ frame_add(void *frame)
   struct frame_table_entry *f = malloc(sizeof(struct frame_table_entry));
   f->frame = frame;
   f->thread = thread_current();
+  f->swap_bitmap_index = -1;
 
   lock_acquire(&frame_lock);
   list_push_back(&frame_table, &f->elem);

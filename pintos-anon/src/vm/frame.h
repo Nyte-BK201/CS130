@@ -2,7 +2,7 @@
 #define VM_FRAME_H
 
 #include "threads/thread.h"
-#include <list.h>
+// #include <list.h>
 #include "lib/kernel/list.h"
 #include "threads/palloc.h"
 #include "userprog/pagedir.h"
@@ -11,6 +11,7 @@ struct frame_table_entry
 {
   void *frame;
   struct thread *thread;
+  size_t swap_bitmap_index; // denote the index of bitmap if swapped
   struct list_elem elem;
 };
 
