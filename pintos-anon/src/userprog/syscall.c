@@ -210,6 +210,8 @@ static int
 _read_ (int fd, void *buffer, unsigned size){
   if(fd == STDOUT_FILENO) _exit_(-1);
   if(fd < 0 || fd > 129) _exit_(-1);
+
+  /* Check if buffer is in the code segment, if yes then exit -1 */
   struct sup_page_table_entry *spte = get_page_table_entry(pg_round_down(buffer));
   if (spte != NULL && spte->file != NULL)
     _exit_(-1);
@@ -247,8 +249,6 @@ _write_ (int fd, const void *buffer, unsigned size){
   for(void *ptr=buffer; ptr<buffer+size; ptr+=PGSIZE){
     check_ptr(ptr);
   }
-
-  // printf("%p\n\n", buffer);
 
   if (size == 0){
     return 0;

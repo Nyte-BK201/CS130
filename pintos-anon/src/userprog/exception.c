@@ -152,8 +152,9 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
-  bool kill_process = page_fault_handler(not_present, write, user, fault_addr, f->esp);
-  if (!kill_process){
+  /* Page fault handler check if the process should be killed or grow stack */
+  bool success = page_fault_handler(not_present, write, user, fault_addr, f->esp);
+  if (!success){
    /* comes from kernel */
     if(!user){
       printf ("Page fault at %p: %s error %s page in %s context.\n",
