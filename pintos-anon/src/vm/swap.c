@@ -26,7 +26,7 @@ swap_out(struct frame_table_entry *frame_entry){
 
     // write to disk sector by sector until full frame finished
     for(int i=0;i<NUM_PER_PAGE;i++){
-        block_write(swap_block,index*NUM_PER_PAGE+i,frame_entry->frame+i*NUM_PER_PAGE);
+        block_write(swap_block,index*NUM_PER_PAGE+i,frame_entry->frame+i*BLOCK_SECTOR_SIZE);
     }
     frame_entry->swap_bitmap_index = index;
 
@@ -46,7 +46,7 @@ swap_in(struct frame_table_entry *frame_entry){
     if(index == BITMAP_ERROR) PANIC("Virtual memory: swap out frame not found!");
 
     for(int i=0;i<NUM_PER_PAGE;i++){
-        block_read(swap_block,index*NUM_PER_PAGE+i,frame_entry->frame+i*NUM_PER_PAGE);
+        block_read(swap_block,index*NUM_PER_PAGE+i,frame_entry->frame+i*BLOCK_SECTOR_SIZE);
     }
     frame_entry->swap_bitmap_index = -1;
 
