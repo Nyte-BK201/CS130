@@ -648,7 +648,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
       */ 
       /* new implementation: load lazily */
-      if(!page_add(upage, NULL, file, ofs, page_read_bytes, page_zero_bytes, writable))
+      if(!page_add(upage, NULL, file, ofs, page_read_bytes, page_zero_bytes, writable, NULL))
         return false;
 
       /* Advance. */
@@ -665,17 +665,18 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp) 
 {
-  uint8_t *kpage;
   bool success = false;
 
-  kpage = frame_allocate (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
+  struct frame_table_entry *fte = frame_allocate (PAL_USER | PAL_ZERO);
+  
+  if (fte != NULL) 
     {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, fte->frame, true);
+      if (success){
         *esp = PHYS_BASE;
-      else
-        frame_free (kpage);
+        success = page_add(esp,NULL,NULL,0,0,0,1,fte);
+      }else
+        frame_free (fte->frame);
     }
   return success;
 }

@@ -14,9 +14,10 @@ frame_init(void)
 }
 
 /* Allocate a page from USER_POOL, and add to frame_table. 
-   Return the newly allocated frame. */
-void*
-frame_allocate(enum palloc_flags flags, struct sup_page_table_entry *spte)
+   Return the newly frame_table_entry. 
+   Return NULL if allocate failed. */
+struct frame_table_entry*
+frame_allocate(enum palloc_flags flags)
 {
   void *frame = NULL;
 
@@ -26,56 +27,43 @@ frame_allocate(enum palloc_flags flags, struct sup_page_table_entry *spte)
   frame = palloc_get_page(flags);
 
   if(frame != NULL){
-    frame_add(frame,spte);
+    return frame_add(frame);
   }else{
     // Fail to allocate a page, evict a frame from frame_table.
     frame_evict();
 
     frame = palloc_get_page(flags);
     if(frame == NULL) PANIC("Virtual memory: frame full, evict failed!\n");
-    frame_add(frame,spte);
+    return frame_add(frame);
   }
-
-  return frame;
+  return NULL;
 }
 
 // Free the given frame and remove it from frame_table.
 void
-frame_free(void *frame)
+frame_free(struct frame_table_entry *fte)
 {
   lock_acquire(&frame_lock);
-
-  // Traverse the frame_table and match.
-  for (struct list_elem *e = list_begin(&frame_table);
-    e != list_end(&frame_table);
-    e = list_next(e)){
-    struct frame_table_entry *frame_temp = list_entry(e,
-                                               struct frame_table_entry, elem);
-
-    if (frame_temp->frame == frame){
-      list_remove(e);
-      free(frame_temp);
-      palloc_free_page(frame);
-      break;
-    }
-  }
-
+  list_remove(&fte->elem);
   lock_release(&frame_lock);
+
+  palloc_free_page(fte->frame);
+  free(fte);
 }
 
-// Add the given frame into frame_table.
-void
-frame_add(void *frame, struct sup_page_table_entry *spte)
+// Create a new frame_table_entry and add the given frame into frame_table.
+struct frame_table_entry*
+frame_add(void *frame)
 {
   struct frame_table_entry *f = malloc(sizeof(struct frame_table_entry));
   f->frame = frame;
   // f->thread = thread_current();
-  f->spte = spte;
   f->swap_bitmap_index = -1;
 
   lock_acquire(&frame_lock);
   list_push_back(&frame_table, &f->elem);
   lock_release(&frame_lock);
+  return f;
 }
 
 /* Choose a frame to evict from the frame_table. 

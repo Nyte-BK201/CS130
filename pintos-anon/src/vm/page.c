@@ -62,7 +62,7 @@ get_page_table_entry(void *user_vaddr)
    inserted. */
 bool page_add(void *user_vaddr, struct sup_page_table_entry **retval,
               struct file *file, off_t ofs, uint32_t read_bytes,
-              uint32_t zero_bytes, bool writable)
+              uint32_t zero_bytes, bool writable, struct frame_table_entry *fte)
 {
   struct thread *cur_thread = thread_current();
   struct sup_page_table_entry *sup_pt_entry = malloc(sizeof(struct sup_page_table_entry));
@@ -77,7 +77,7 @@ bool page_add(void *user_vaddr, struct sup_page_table_entry **retval,
   sup_pt_entry->read_bytes = read_bytes;
   sup_pt_entry->zero_bytes = zero_bytes;
   sup_pt_entry->offset = ofs;
-  sup_pt_entry->kpage = NULL;
+  sup_pt_entry->fte = fte;
   sup_pt_entry->writable = writable;
 
   // Transmit the newed supplymentary page out. Used by grow_stack().
@@ -116,32 +116,21 @@ page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, vo
             return false;
         }else{
             /* A2: valid. Try stack growth and return */
-            sup_pt_entry = new struct
-            return grow_stack(pg_round_down(fault_addr), sup_pt_entry);
+            return grow_stack(pg_round_down(fault_addr));
         }
 
     // B: a page fault with an address in the virtual page table but evicted
     }else{
-        /* B1: lazy load. The frame is evicted but not in disk.
+        /* B1: lazy load/ the frame is evicted but not in disk.
             We allocate a frame and read the file into it again.
             */
-        if(sup_pt_entry->file){}
-        void *new_frame = frame_allocate(PAL_USER, sup_pt_entry);
-        sup_pt_entry->file = file_reopen(sup_pt_entry->file);
-        file_read_at(sup_pt_entry->file, new_frame, sup_pt_entry->read_bytes, sup_pt_entry->offset);
-
-        // Record the frame it belongs to.
-        sup_pt_entry->kpage = new_frame;
-
-        // Make the spare part of frame to be all zero.
-        memset(new_frame + (sup_pt_entry->read_bytes), 0, sup_pt_entry->zero_bytes);
-
-        // Install page. install_page() in process.c is static.
-        pagedir_get_page(thread_current()->pagedir, sup_pt_entry->user_vaddr);
-        pagedir_set_page(thread_current()->pagedir, sup_pt_entry->user_vaddr, sup_pt_entry->kpage, sup_pt_entry->writable);
-        return true;
-
+        if(sup_pt_entry->fte == NULL || sup_pt_entry->fte->swap_bitmap_index == -1){
+          return lazy_load(sup_pt_entry);
+        }else{
         /* B2: swapped. A modified page in the disk, we should swap it back */
+          swap_in(sup_pt_entry->fte);
+          return true;
+        }
     }
   
     // situation not matched to any of the above kinds
@@ -161,17 +150,35 @@ vaddr_invalid_check(void *fault_addr, void *esp)
 
 // Give more memory (one page) to the user. Return true if success.
 bool
-grow_stack(void *user_vaddr, struct sup_page_table_entry *spte)
+grow_stack(void *user_vaddr)
 {
-  void *new_frame = frame_allocate(PAL_ZERO | PAL_USER, spte);
+  struct frame_table_entry *fte = frame_allocate(PAL_ZERO | PAL_USER);
 
   /* Make it possible to get the new page from page_add() 
      since the function returns a bool value. */
   struct sup_page_table_entry * pte;
   // Add a page into page table with no file and writable.
-  page_add(user_vaddr, &pte, NULL, 0, 0, 0, 1);
-  // Record the frame it belongs to.
-  pte->kpage = new_frame;
-  pagedir_set_page(thread_current()->pagedir, pte->user_vaddr, pte->kpage, 1);
+  page_add(user_vaddr, &pte, NULL, 0, 0, 0, 1, fte);
+  // Record the frame_table_entry it belongs to.
+  pagedir_set_page(thread_current()->pagedir, pte->user_vaddr, fte->frame, 1);
   return true;
+}
+
+bool
+lazy_load(struct sup_page_table_entry *spte){
+  // detele old fte if exsit, and allocate a new one 
+  if(!spte->fte) free(spte->fte);
+  struct frame_table_entry *fte = frame_allocate(PAL_USER);
+  spte->fte = fte;
+
+  spte->file = file_reopen(spte->file);
+  file_read_at(spte->file, fte->frame, spte->read_bytes, spte->offset);
+
+  // Make the spare part of frame to be all zero.
+  memset(fte->frame + (spte->read_bytes), 0, spte->zero_bytes);
+
+  // Install page. install_page() in process.c is static.
+  pagedir_get_page(thread_current()->pagedir, spte->user_vaddr);
+  pagedir_set_page(thread_current()->pagedir, spte->user_vaddr, fte->frame, spte->writable);
+  return true; 
 }

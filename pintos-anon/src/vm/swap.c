@@ -15,9 +15,9 @@ swap_init(){
 /* swap out a given frame from physical memory to device;
     panic if something goes wrong */
 void
-swap_out(struct frame_table_entry *frame_entry){
-    ASSERT(frame_entry->frame!= NULL);
-    ASSERT(frame_entry->swap_bitmap_index == -1);
+swap_out(struct frame_table_entry *fte){
+    ASSERT(fte->frame!= NULL);
+    ASSERT(fte->swap_bitmap_index == -1);
     lock_acquire(&swap_lock);
 
     // find a free place in bitmap to put frame
@@ -26,9 +26,9 @@ swap_out(struct frame_table_entry *frame_entry){
 
     // write to disk sector by sector until full frame finished
     for(int i=0;i<NUM_PER_PAGE;i++){
-        block_write(swap_block,index*NUM_PER_PAGE+i,frame_entry->frame+i*BLOCK_SECTOR_SIZE);
+        block_write(swap_block,index*NUM_PER_PAGE+i,fte->frame+i*BLOCK_SECTOR_SIZE);
     }
-    frame_entry->swap_bitmap_index = index;
+    fte->swap_bitmap_index = index;
 
     lock_release(&swap_lock);
 }
@@ -36,19 +36,19 @@ swap_out(struct frame_table_entry *frame_entry){
 /* swap in a given frame from device to physical memory;
     panic if something goes wrong */
 void
-swap_in(struct frame_table_entry *frame_entry){
-    ASSERT(frame_entry->frame != NULL);
-    ASSERT(frame_entry->swap_bitmap_index != -1);
+swap_in(struct frame_table_entry *fte){
+    ASSERT(fte->frame != NULL);
+    ASSERT(fte->swap_bitmap_index != -1);
     lock_acquire(&swap_lock);
 
     // find the given frame
-    size_t index = bitmap_scan_and_flip(swap_bitmap,frame_entry->swap_bitmap_index,1,true);
+    size_t index = bitmap_scan_and_flip(swap_bitmap,fte->swap_bitmap_index,1,true);
     if(index == BITMAP_ERROR) PANIC("Virtual memory: swap out frame not found!\n");
 
     for(int i=0;i<NUM_PER_PAGE;i++){
-        block_read(swap_block,index*NUM_PER_PAGE+i,frame_entry->frame+i*BLOCK_SECTOR_SIZE);
+        block_read(swap_block,index*NUM_PER_PAGE+i,fte->frame+i*BLOCK_SECTOR_SIZE);
     }
-    frame_entry->swap_bitmap_index = -1;
+    fte->swap_bitmap_index = -1;
 
     lock_release(&swap_lock);
 }

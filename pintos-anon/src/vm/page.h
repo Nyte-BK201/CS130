@@ -20,7 +20,7 @@ struct sup_page_table_entry
   off_t offset;
   uint32_t read_bytes;
   uint32_t zero_bytes;
-  void* kpage;
+  struct frame_table_entry *fte;
   struct hash_elem elem; /* hash elem for hash table */
 };
 
@@ -29,7 +29,7 @@ void page_table_free(struct hash *);
 struct sup_page_table_entry *get_page_table_entry(void *);
 bool page_add(void *user_vaddr, struct sup_page_table_entry **retval,
               struct file *file, off_t ofs, uint32_t read_bytes,
-              uint32_t zero_bytes, bool writable);
+              uint32_t zero_bytes, bool writable, struct frame_table_entry *);
 bool page_fault_handler(bool, bool, bool, void *, void *);
 bool vaddr_invalid_check(void *, void *);
 
