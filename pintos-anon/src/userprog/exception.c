@@ -4,6 +4,7 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -152,19 +153,22 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
+  bool kill_process = page_fault_handler(not_present, write, user, fault_addr, f->esp);
+  if (kill_process){
    /* comes from kernel */
-   if(!user){
+    if(!user){
       printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
       kill (f);
-   }else{
+    }else{
       /* exit user thread */
       thread_current ()->ret = -1;
       thread_exit ();
-   }
+    }
+  }
   
 }
 
