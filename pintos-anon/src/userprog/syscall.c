@@ -12,6 +12,7 @@
 #include "lib/stdio.h"
 #include "lib/kernel/console.h"
 #include "pagedir.h"
+#include "vm/page.h"
 
 #define ADDR_UNDER_CODE_SEG (0x08048000)
 
@@ -76,7 +77,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   /* Calculate stack pointer in 4 bytes */
   int *sp = (int *)f->esp;
-  check_ptr_length(sp,4);
+  check_ptr_length(sp, 4);
 
   int call = *sp;
   // printf ("system call: %d\n", call);
@@ -125,6 +126,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   }else if(call==SYS_CLOSE){
     check_ptr_length(sp+1,4);
     _close_(*(sp + 1));
+  }else{
+    f->eax = -1;
   }
   
 }
@@ -207,6 +210,9 @@ static int
 _read_ (int fd, void *buffer, unsigned size){
   if(fd == STDOUT_FILENO) _exit_(-1);
   if(fd < 0 || fd > 129) _exit_(-1);
+  struct sup_page_table_entry *spte = get_page_table_entry(pg_round_down(buffer));
+  if (spte != NULL && spte->file != NULL)
+    _exit_(-1);
 
   /* check every buffer page validity */
   for(void *ptr=buffer; ptr<buffer+size; ptr+=PGSIZE){
@@ -242,12 +248,15 @@ _write_ (int fd, const void *buffer, unsigned size){
     check_ptr(ptr);
   }
 
+  // printf("%p\n\n", buffer);
+
   if (size == 0){
     return 0;
   }else if(fd == STDOUT_FILENO){
     putbuf(buffer,size);
     return size;
   }else{
+    
     struct file *curfile = thread_current()->file_use[fd];
     if(curfile == NULL) _exit_(-1);
 

@@ -539,7 +539,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
   return success;
 }
 
@@ -646,15 +646,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           frame_free (kpage);
           return false; 
         }
-      */
-
+      */ 
       /* new implementation: load lazily */
-      if(!page_add(upage))return false;
+      if(!page_add(upage, NULL, file, ofs, page_read_bytes, page_zero_bytes, writable))
+        return false;
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+      ofs += PGSIZE;
     }
   return true;
 }

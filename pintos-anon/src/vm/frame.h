@@ -4,6 +4,8 @@
 #include "threads/thread.h"
 #include <list.h>
 #include "lib/kernel/list.h"
+#include "threads/palloc.h"
+#include "userprog/pagedir.h"
 
 struct frame_table_entry
 {
