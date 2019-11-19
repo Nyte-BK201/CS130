@@ -17,6 +17,7 @@ swap_init(){
 void
 swap_out(struct frame_table_entry *frame_entry){
     ASSERT(frame_entry->frame!= NULL);
+    ASSERT(frame_entry->swap_bitmap_index == -1);
     lock_acquire(&swap_lock);
 
     // find a free place in bitmap to put frame
@@ -36,7 +37,8 @@ swap_out(struct frame_table_entry *frame_entry){
     panic if something goes wrong */
 void
 swap_in(struct frame_table_entry *frame_entry){
-    ASSERT(frame_entry->frame!= NULL);
+    ASSERT(frame_entry->frame != NULL);
+    ASSERT(frame_entry->swap_bitmap_index != -1);
     lock_acquire(&swap_lock);
 
     // find the given frame
@@ -46,6 +48,7 @@ swap_in(struct frame_table_entry *frame_entry){
     for(int i=0;i<NUM_PER_PAGE;i++){
         block_read(swap_block,index*NUM_PER_PAGE+i,frame_entry->frame+i*NUM_PER_PAGE);
     }
+    frame_entry->swap_bitmap_index = -1;
 
     lock_release(&swap_lock);
 }
