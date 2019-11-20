@@ -7,6 +7,8 @@
 #include <hash.h>
 #include "threads/synch.h"
 #include "threads/malloc.h"
+#include "lib/user/syscall.h"
+#include "vm/page.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -118,7 +120,9 @@ struct thread
     struct file *process_exec_file; /* this process's exec file */
 
 /* =========================== project 3 =============================== */
-    struct hash sup_page_table;         /* Supplementary page table */
+    struct hash sup_page_table;         /* Supplementary page table. */
+    struct list mem_map_table;          /* Memory mapping table. */
+    mapid_t mapid_suggest;              /* Next map id can be used. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

@@ -499,6 +499,8 @@ init_thread (struct thread *t, const char *name, int priority)
   if (list_size(&all_list) != 0){
     page_table_init(&t->sup_page_table);
   }
+  t->mapid_suggest = 0;
+  list_init(&t->mem_map_table);
 
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, 

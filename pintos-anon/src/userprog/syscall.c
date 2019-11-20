@@ -33,6 +33,10 @@ static void _seek_ (int fd, unsigned position);
 static unsigned _tell_ (int fd);
 static void _close_ (int fd);
 
+/* ============================ project 3 ============================= */
+static mapid_t _mmap_ (int fd, void *addr );
+static void _munmap_ (mapid_t mapping);
+
 /* return true if a pointer is valid */
 bool check_ptr(char *ptr){
   if(ptr == NULL || !is_user_vaddr(ptr) || ptr < ADDR_UNDER_CODE_SEG)
@@ -103,29 +107,36 @@ syscall_handler (struct intr_frame *f UNUSED)
   }else if(call == SYS_OPEN){
     check_ptr_length(sp+1,4);
     f->eax = _open_(*(sp + 1));
-  }else if(call==SYS_FILESIZE){
+  }else if(call == SYS_FILESIZE){
     check_ptr_length(sp+1,4);
     f->eax = _filesize_(*(sp + 1));
-  }else if(call==SYS_READ){
+  }else if(call == SYS_READ){
     check_ptr_length(sp+1,4);
     check_ptr_length(sp+2,4);
     check_ptr_length(sp+3,4);
     f->eax = _read_(*(sp + 1), *(sp + 2), *(sp + 3));
-  }else if(call==SYS_WRITE){
+  }else if(call == SYS_WRITE){
     check_ptr_length(sp+1,4);
     check_ptr_length(sp+2,4);
     check_ptr_length(sp+3,4);
     f->eax = _write_(*(sp+1), *(sp+2), *(sp+3));
-  }else if(call==SYS_SEEK){
+  }else if(call == SYS_SEEK){
     check_ptr_length(sp+1,4);
     check_ptr_length(sp+2,4);
     _seek_(*(sp + 1), *(sp + 2));
-  }else if(call==SYS_TELL){
+  }else if(call == SYS_TELL){
     check_ptr_length(sp+1,4);
     f->eax = _tell_(*(sp + 1));
-  }else if(call==SYS_CLOSE){
+  }else if(call == SYS_CLOSE){
     check_ptr_length(sp+1,4);
     _close_(*(sp + 1));
+  }else if(call == SYS_MMAP){
+    check_ptr_length(sp + 1, 4);
+    check_ptr_length(sp + 2, 4);
+    f->eax = _mmap_(*(sp + 1), *(sp + 2));
+  }else if(call == SYS_MUNMAP){
+    check_ptr_length(sp + 1, 4);
+    _munmap_(*(sp + 1));
   }else{
     f->eax = -1;
   }
@@ -305,4 +316,91 @@ _close_ (int fd){
   /* Close the file and remove from the thread */
   file_close(curfile);
   cur->file_use[fd] = NULL;
+}
+
+static mapid_t
+_mmap_(int fd, void *addr)
+{
+  if (fd == STDOUT_FILENO || fd == STDIN_FILENO)
+    _exit_(-1);
+  if (fd < 0 || fd > 129)
+    _exit_(-1);
+
+  struct thread *cur = thread_current();
+
+  /* Get the target file */
+  struct file *curfile = cur->file_use[fd];
+  if (curfile == NULL)
+    _exit_(-1);
+
+  /* Reopen a file to refresh */
+  curfile = file_reopen(curfile);
+
+  uint32_t file_len = file_length(curfile);
+  uint32_t read_bytes = file_len;
+  uint32_t offset = 0;
+  while (read_bytes > 0 && offset < read_bytes){
+    /* Calculate how to fill this page.
+         We will read PAGE_READ_BYTES bytes from FILE
+         and zero the final PAGE_ZERO_BYTES bytes. */
+    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+    /* Ensure that there is enough space to map. */
+    if (get_page_table_entry(addr + offset))
+      exit(-1);
+    if (pagedir_get_page(cur->pagedir, addr + offset))
+      exit(-1);
+    
+    if (!page_add(addr, NULL, curfile, offset, page_read_bytes, page_zero_bytes, true, NULL))
+      exit(-1);
+
+    offset += PGSIZE;
+  }
+
+  struct mem_map_entry *mem_map_e = (struct mem_map_entry *)malloc(sizeof(struct mem_map_entry));
+  mem_map_e->mapid = cur->mapid_suggest;
+  mem_map_e->user_vaddr = addr;
+  mem_map_e->file_size = file_len;
+  mem_map_e->file = curfile;
+  list_push_back(&cur->mem_map_table, &mem_map_e->elem);
+
+  cur->mapid_suggest++;
+  return mem_map_e->mapid;
+}
+
+static void
+_munmap_(mapid_t mapping)
+{
+  struct thread *cur_thread = thread_current();
+
+  for (struct list_elem *e = list_begin(&cur_thread->child_list);
+       e != list_end(&cur_thread->child_list);
+       e = list_next(e)){
+
+        struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
+        if (mem_map_e->mapid == mapping){
+          
+          /* Remove pages of the file one by one. */
+          for (uint32_t offset = 0; offset < mem_map_e->file_size; offset += PGSIZE){
+            struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->user_vaddr);
+
+            /* Write back if the page has been written */
+            if (spte->dirty == true){
+              file_read_at(spte->file, spte->user_vaddr, mem_map_e->file_size, spte->offset);
+              file_write(spte->file, spte->user_vaddr, spte->read_bytes);
+            }
+            
+            /* Let the page die. */
+            frame_free(spte->fte);
+            pagedir_clear_page(cur_thread->pagedir, spte->user_vaddr);
+            hash_delete(&cur_thread->sup_page_table, &spte->elem);
+            free(spte);
+            list_remove(e);
+          }
+          file_close(mem_map_e->file);
+          free(mem_map_e);
+          break;
+        }
+      }
 }

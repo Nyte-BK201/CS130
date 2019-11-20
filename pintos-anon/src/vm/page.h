@@ -24,6 +24,15 @@ struct sup_page_table_entry
   struct hash_elem elem; /* hash elem for hash table */
 };
 
+struct mem_map_entry
+{
+  int file_size;
+  struct file *file;
+  uint32_t *user_vaddr;
+  mapid_t mapid;
+  struct list_elem elem;
+};
+
 void page_table_init(struct hash *);
 void page_table_free(struct hash *);
 struct sup_page_table_entry *get_page_table_entry(void *);

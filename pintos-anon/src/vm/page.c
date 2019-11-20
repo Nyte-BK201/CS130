@@ -42,8 +42,7 @@ page_table_free(struct hash *sup_page_table)
 }
 
 /* Get a supplymentary page table entry by the given user virtual address.
-    Return NULL if not in page_table
-    */
+   Return NULL if not in page_table. */
 struct sup_page_table_entry *
 get_page_table_entry(void *user_vaddr)
 {
@@ -101,40 +100,40 @@ bool page_add(void *user_vaddr, struct sup_page_table_entry **retval,
 bool
 page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, void *esp)
 {
-    // invalid address 
-    if (!user || vaddr_invalid_check(fault_addr, esp) || !not_present){
-        return false;
-    }
-
-    struct sup_page_table_entry *sup_pt_entry = get_page_table_entry(fault_addr);
-    // A: a page fault with an address not in the virtual page table
-    if (sup_pt_entry == NULL){
-        if (fault_addr < (esp - 32)){
-            /* A1: Invalid address usage.
-                An address that does not appear to be a stack access.
-                */
-            return false;
-        }else{
-            /* A2: valid. Try stack growth and return */
-            return grow_stack(pg_round_down(fault_addr));
-        }
-
-    // B: a page fault with an address in the virtual page table but evicted
-    }else{
-        /* B1: lazy load/ the frame is evicted but not in disk.
-            We allocate a frame and read the file into it again.
-            */
-        if(sup_pt_entry->fte == NULL || sup_pt_entry->fte->swap_bitmap_index == -1){
-          return lazy_load(sup_pt_entry);
-        }else{
-        /* B2: swapped. A modified page in the disk, we should swap it back */
-          swap_in(sup_pt_entry->fte);
-          return true;
-        }
-    }
-  
-    // situation not matched to any of the above kinds
+  // invalid address 
+  if (!user || vaddr_invalid_check(fault_addr, esp) || !not_present){
     return false;
+  }
+
+  struct sup_page_table_entry *sup_pt_entry = get_page_table_entry(fault_addr);
+  // A: a page fault with an address not in the virtual page table
+  if (sup_pt_entry == NULL){
+    if (fault_addr < (esp - 32)){
+      /* A1: Invalid address usage.
+         An address that does not appear to be a stack access.
+        */
+      return false;
+    }else{
+      /* A2: valid. Try stack growth and return */
+      return grow_stack(pg_round_down(fault_addr));
+    }
+
+  // B: a page fault with an address in the virtual page table but evicted
+  }else{
+    /* B1: lazy load/ the frame is evicted but not in disk.
+       We allocate a frame and read the file into it again.
+      */
+    if(sup_pt_entry->fte == NULL || sup_pt_entry->fte->swap_bitmap_index == -1){
+      return lazy_load(sup_pt_entry);
+    }else{
+    /* B2: swapped. A modified page in the disk, we should swap it back */
+      swap_in(sup_pt_entry->fte);
+      return true;
+    }
+  }
+
+  // situation not matched to any of the above kinds
+  return false;
 }
 
 /* Check if a virtual address is invalid when a page fault occurs.
