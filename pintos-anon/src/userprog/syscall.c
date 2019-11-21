@@ -325,9 +325,21 @@ _mmap_(int fd, void *addr)
     _exit_(-1);
   if (fd < 0 || fd > 129)
     _exit_(-1);
+  if ((unsigned)addr % 4096 != 0 || addr == NULL)
+    return -1;
+  if (get_page_table_entry(addr) != NULL)
+    return -1;
+
 
   struct thread *cur = thread_current();
 
+  for (struct list_elem *e = list_begin(&cur->mem_map_table);
+       e != list_end(&cur->mem_map_table);
+       e = list_next(e))
+  {
+    struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
+    if (addr == mem_map_e->user_vaddr) return -1;
+  }
   /* Get the target file */
   struct file *curfile = cur->file_use[fd];
   if (curfile == NULL)
@@ -348,12 +360,11 @@ _mmap_(int fd, void *addr)
 
     /* Ensure that there is enough space to map. */
     if (get_page_table_entry(addr + offset))
-      exit(-1);
+      return -1;
     if (pagedir_get_page(cur->pagedir, addr + offset))
-      exit(-1);
-    
-    if (!page_add(addr, NULL, curfile, offset, page_read_bytes, page_zero_bytes, true, NULL))
-      exit(-1);
+      return -1;
+    if (!page_add(addr + offset, NULL, curfile, offset, page_read_bytes, page_zero_bytes, true, NULL))
+      return -1;
 
     offset += PGSIZE;
   }
@@ -373,26 +384,22 @@ static void
 _munmap_(mapid_t mapping)
 {
   struct thread *cur_thread = thread_current();
-
-  for (struct list_elem *e = list_begin(&cur_thread->child_list);
-       e != list_end(&cur_thread->child_list);
+  for (struct list_elem *e = list_begin(&cur_thread->mem_map_table);
+       e != list_end(&cur_thread->mem_map_table);
        e = list_next(e)){
 
         struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
         if (mem_map_e->mapid == mapping){
-          
           /* Remove pages of the file one by one. */
           for (uint32_t offset = 0; offset < mem_map_e->file_size; offset += PGSIZE){
-            struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->user_vaddr);
-
+            struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->user_vaddr + offset);
             /* Write back if the page has been written */
-            if (spte->dirty == true){
-              file_read_at(spte->file, spte->user_vaddr, mem_map_e->file_size, spte->offset);
-              file_write(spte->file, spte->user_vaddr, spte->read_bytes);
+            if (pagedir_is_dirty(cur_thread->pagedir, spte->user_vaddr)){
+              file_write_at(spte->file, spte->user_vaddr, PGSIZE, spte->offset);
             }
-            
+
             /* Let the page die. */
-            frame_free(spte->fte);
+            // frame_free(spte->fte);
             pagedir_clear_page(cur_thread->pagedir, spte->user_vaddr);
             hash_delete(&cur_thread->sup_page_table, &spte->elem);
             free(spte);
