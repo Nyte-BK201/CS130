@@ -3,6 +3,17 @@
 #include "threads/vaddr.h"
 #include "devices/timer.h"
 
+static bool
+install_page (void *upage, void *kpage, bool writable)
+{
+  struct thread *t = thread_current ();
+
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
 static unsigned
 page_hash_func(const struct hash_elem *e, void *aux UNUSED)
 {
@@ -28,10 +39,12 @@ static void page_destroy_func(struct hash_elem *e, void *aux UNUSED)
     // in physical memory
     if(spte->fte->swap_bitmap_index == -1){
       frame_free(spte->fte);
+      pagedir_clear_page(thread_current()->pagedir, spte->user_vaddr);
     }else{
     // in swap slot 
       swap_in(spte->fte);
       palloc_free_page(spte->fte->frame);
+      pagedir_clear_page(thread_current()->pagedir, spte->user_vaddr);
     }
     free(spte->fte);
   }
@@ -128,9 +141,7 @@ page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, vo
       return lazy_load(sup_pt_entry);
     }else{
     /* B2: swapped. A modified page in the disk, we should swap it back */
-      swap_in(sup_pt_entry->fte);
-      frame_add_to_list(sup_pt_entry->fte);
-      return true;
+      return swap_page(sup_pt_entry);
     }
   }
 
@@ -153,20 +164,18 @@ vaddr_invalid_check(void *fault_addr, void *esp)
 bool
 grow_stack(void *user_vaddr)
 {
-  struct sup_page_table_entry * pte = malloc(sizeof(struct sup_page_table_entry));
-  struct frame_table_entry *fte = frame_allocate(PAL_ZERO | PAL_USER, pte);
+  struct sup_page_table_entry * spte = malloc(sizeof(struct sup_page_table_entry));
+  struct frame_table_entry *fte = frame_allocate(PAL_ZERO | PAL_USER, spte);
 
   // Add a page into page table with no file and writable.
-  if(!page_add(user_vaddr, pte, NULL, 0, 0, 0, 1, fte)){
+  if(!page_add(user_vaddr, spte, NULL, 0, 0, 0, 1, fte)){
     frame_free(fte);
-    free(pte);
+    free(spte);
     free(fte);
     return false;
   }
   
-  // Record the frame_table_entry it belongs to.
-  pagedir_set_page(thread_current()->pagedir, pte->user_vaddr, fte->frame, 1);
-  return true;
+  return install_page(spte->user_vaddr,spte->fte->frame,spte->writable);
 }
 
 bool
@@ -184,8 +193,15 @@ lazy_load(struct sup_page_table_entry *spte){
   // Make the spare part of frame to be all zero.
   memset(fte->frame + (spte->read_bytes), 0, spte->zero_bytes);
 
-  // Install page. install_page() in process.c is static.
-  pagedir_get_page(thread_current()->pagedir, spte->user_vaddr);
-  pagedir_set_page(thread_current()->pagedir, spte->user_vaddr, fte->frame, spte->writable);
-  return true; 
+  return install_page(spte->user_vaddr,spte->fte->frame,spte->writable);
+}
+
+bool
+swap_page(struct sup_page_table_entry *spte){
+  spte->fte->frame = palloc_get_page(PAL_USER);
+
+  swap_in(spte->fte);
+  frame_add_to_list(spte->fte);
+
+  return install_page(spte->user_vaddr,spte->fte->frame,spte->writable);
 }

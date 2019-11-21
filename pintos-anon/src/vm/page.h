@@ -38,5 +38,6 @@ bool page_fault_handler(bool, bool, bool, void *, void *);
 bool vaddr_invalid_check(void *, void *);
 bool grow_stack(void *);
 bool lazy_load(struct sup_page_table_entry *);
+bool swap_page(struct sup_page_table_entry *);
 
 #endif /* vm/page.h */

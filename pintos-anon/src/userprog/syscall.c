@@ -340,7 +340,6 @@ _mmap_(int fd, void *addr)
   curfile = file_reopen(curfile);
   if(curfile == NULL || file_length(curfile) == 0) return -1;
 
-  struct sup_page_table_entry *first_spte = NULL;
   uint32_t file_len = file_length(curfile);
   uint32_t read_bytes = file_len;
   uint32_t offset = 0;
@@ -348,7 +347,7 @@ _mmap_(int fd, void *addr)
   /* Record the memory map into list. */
   struct mem_map_entry *mem_map_e = (struct mem_map_entry *)malloc(sizeof(struct mem_map_entry));
   mem_map_e->mapid = cur->mapid_suggest;
-  mem_map_e->spte = first_spte;
+  mem_map_e->spte = NULL;
   list_push_back(&cur->mem_map_table, &mem_map_e->elem);
 
   while (read_bytes > 0 && offset < read_bytes){
@@ -369,7 +368,7 @@ _mmap_(int fd, void *addr)
 
     // record the first spte
     if(offset == 0){
-      first_spte = spte;
+      mem_map_e->spte = spte;
     }
 
     offset += PGSIZE;
