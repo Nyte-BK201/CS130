@@ -198,10 +198,14 @@ lazy_load(struct sup_page_table_entry *spte){
 
 bool
 swap_page(struct sup_page_table_entry *spte){
-  spte->fte->frame = palloc_get_page(PAL_USER);
+  struct frame_table_entry *fte = frame_allocate(PAL_USER, spte);
+  fte->swap_bitmap_index = spte->fte->swap_bitmap_index;
+
+  // remove old one, switch to new one
+  free(spte->fte);
+  spte->fte = fte;
 
   swap_in(spte->fte);
-  frame_add_to_list(spte->fte);
 
   return install_page(spte->user_vaddr,spte->fte->frame,spte->writable);
 }
