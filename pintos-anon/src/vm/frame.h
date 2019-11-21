@@ -21,6 +21,8 @@ struct frame_table_entry
 void frame_init(void);
 struct frame_table_entry *frame_allocate(enum palloc_flags flags, struct sup_page_table_entry *spte);
 void frame_free(struct frame_table_entry *);
+void frame_remove_from_list(struct frame_table_entry *);
+void frame_add_to_list(struct frame_table_entry *);
 struct frame_table_entry *frame_add(void *, struct sup_page_table_entry *);
 
 #endif /* vm/frame.h */

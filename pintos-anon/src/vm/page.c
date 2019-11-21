@@ -23,9 +23,19 @@ page_less_func(const struct hash_elem *a,
 // Get a supplymental page from hash table and destroy it.
 static void page_destroy_func(struct hash_elem *e, void *aux UNUSED)
 {
-  struct sup_page_table_entry *sup_pt_entry = hash_entry(e, struct sup_page_table_entry, elem);
-  free(sup_pt_entry->fte);
-  free(sup_pt_entry);
+  struct sup_page_table_entry *spte = hash_entry(e, struct sup_page_table_entry, elem);
+  if(spte->fte != NULL){
+    // in physical memory
+    if(spte->fte->swap_bitmap_index == -1){
+      frame_free(spte->fte);
+    }else{
+    // in swap slot 
+      swap_in(spte->fte);
+      palloc_free_page(spte->fte->frame);
+    }
+    free(spte->fte);
+  }
+  free(spte);
 }
 
 // Init a page table, called when a thread init.
@@ -119,6 +129,7 @@ page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, vo
     }else{
     /* B2: swapped. A modified page in the disk, we should swap it back */
       swap_in(sup_pt_entry->fte);
+      frame_add_to_list(sup_pt_entry->fte);
       return true;
     }
   }

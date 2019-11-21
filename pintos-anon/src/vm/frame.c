@@ -39,6 +39,22 @@ frame_allocate(enum palloc_flags flags, struct sup_page_table_entry *spte)
   return NULL;
 }
 
+void
+frame_remove_from_list(struct frame_table_entry *fte){
+  if(fte == NULL) return;
+  lock_acquire(&frame_lock);
+  list_remove(&fte->elem);
+  lock_release(&frame_lock);
+}
+
+void
+frame_add_to_list(struct frame_table_entry *fte){
+  if(fte == NULL) return;
+  lock_acquire(&frame_lock);
+  list_push_back(&frame_table, &fte->elem);
+  lock_release(&frame_lock);
+}
+
 /* Free the given frame and remove it from frame_table.
   IMPORTANT: This function will not free fte;
   !!!! We should manually free fte !!!!
@@ -49,9 +65,7 @@ frame_allocate(enum palloc_flags flags, struct sup_page_table_entry *spte)
 void
 frame_free(struct frame_table_entry *fte)
 {
-  lock_acquire(&frame_lock);
-  list_remove(&fte->elem);
-  lock_release(&frame_lock);
+  frame_remove_from_list(fte);
 
   palloc_free_page(fte->frame);
   // free(fte);
@@ -67,9 +81,7 @@ frame_add(void *frame, struct sup_page_table_entry *spte)
   f->swap_bitmap_index = -1;
   f->spte = spte;
 
-  lock_acquire(&frame_lock);
-  list_push_back(&frame_table, &f->elem);
-  lock_release(&frame_lock);
+  frame_add_to_list(f);
   return f;
 }
 
@@ -109,8 +121,9 @@ frame_evict(void)
           }
         }
 
+        palloc_free_page(fte->frame);
         pagedir_clear_page(pd,upage);
-        frame_free(fte);
+        list_remove(&fte->elem);
 
         found = true;
         break;
