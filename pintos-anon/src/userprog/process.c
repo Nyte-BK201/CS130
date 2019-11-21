@@ -648,8 +648,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
       */ 
       /* new implementation: load lazily */
-      if(!page_add(upage, NULL, file, ofs, page_read_bytes, page_zero_bytes, writable, NULL))
+      struct sup_page_table_entry *spte = malloc(sizeof(struct sup_page_table_entry));
+      if(!page_add(upage, spte, file, ofs, page_read_bytes, page_zero_bytes, writable, NULL)){
+        free(spte);
         return false;
+      }
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -667,17 +670,28 @@ setup_stack (void **esp)
 {
   bool success = false;
 
-  struct frame_table_entry *fte = frame_allocate (PAL_USER | PAL_ZERO);
+  struct sup_page_table_entry *spte = malloc(sizeof(struct sup_page_table_entry));
+  if(spte == NULL) return false;
+
+  struct frame_table_entry *fte = frame_allocate (PAL_USER | PAL_ZERO, spte);
+  if(fte == NULL){
+    free(spte);
+    return false;
+  }
+
+  success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, fte->frame, true);
+  if (success){
+    *esp = PHYS_BASE;
+    success = page_add(esp,spte,NULL,0,0,0,1,fte);
+  }
+
+  // install_page fail or page_add fail
+  if(!success){
+    frame_free (fte->frame);
+    free(spte);
+    free(fte);
+  }
   
-  if (fte != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, fte->frame, true);
-      if (success){
-        *esp = PHYS_BASE;
-        success = page_add(esp,NULL,NULL,0,0,0,1,fte);
-      }else
-        frame_free (fte->frame);
-    }
   return success;
 }
 
