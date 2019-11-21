@@ -302,8 +302,8 @@ thread_exit (void)
   process_exit ();
 #endif
 
-  if (list_size(&all_list) > 1)
-    page_table_free(&(thread_current()->sup_page_table));
+  // if (list_size(&all_list) > 1)
+    // page_table_free(&(thread_current()->sup_page_table));
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */

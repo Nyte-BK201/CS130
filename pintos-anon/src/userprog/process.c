@@ -719,7 +719,7 @@ setup_stack (void **esp)
   success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, fte->frame, true);
   if (success){
     *esp = PHYS_BASE;
-    success = page_add(esp,spte,NULL,0,0,0,1,fte);
+    success = page_add(((uint8_t *) PHYS_BASE) - PGSIZE,spte,NULL,0,0,0,1,fte);
   }
 
   // install_page fail or page_add fail

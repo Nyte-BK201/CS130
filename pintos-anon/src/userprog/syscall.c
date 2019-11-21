@@ -398,13 +398,18 @@ _munmap_(mapid_t mapping)
             return;
           }
 
+          int32_t len = file_length(mem_map_e->spte->file);
+          struct file *file_tp = mem_map_e->spte->file;
           /* Remove pages of the file one by one. */
-          for (uint32_t offset = 0; offset < file_length(mem_map_e->spte->file); offset += PGSIZE){
+          for (uint32_t offset = 0; offset < len; offset += PGSIZE){
             struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->spte->user_vaddr + offset);
             // prevent a failed mapping inside
             if(spte == NULL){
               list_remove(&mem_map_e->elem);
               free(mem_map_e);
+              if(file_tp){
+                file_close(file_tp);            
+              }
               return;
             }
 
@@ -420,7 +425,9 @@ _munmap_(mapid_t mapping)
             hash_delete(&cur_thread->sup_page_table, &spte->elem);
             free(spte);
           }
-          file_close(mem_map_e->spte->file);
+          if(file_tp){
+            file_close(file_tp);            
+          }
           list_remove(&mem_map_e->elem);
           free(mem_map_e);
           break;
