@@ -354,8 +354,8 @@ process_exit (void)
     file_close(cur->process_exec_file);
   }
 
-  /* E: recycle all virtual memories */
-  // page_table_free(&cur->sup_page_table);
+  /* E: recycle all virtual memories(F will do the rest pagedir_destory) */
+  page_table_free(&cur->sup_page_table);
 
   /* F: destory page allocated */
   /* Destroy the current process's page directory and switch back

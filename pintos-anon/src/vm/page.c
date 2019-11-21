@@ -24,6 +24,7 @@ page_less_func(const struct hash_elem *a,
 static void page_destroy_func(struct hash_elem *e, void *aux UNUSED)
 {
   struct sup_page_table_entry *sup_pt_entry = hash_entry(e, struct sup_page_table_entry, elem);
+  free(sup_pt_entry->fte);
   free(sup_pt_entry);
 }
 
@@ -34,7 +35,7 @@ page_table_init(struct hash *sup_page_table)
   hash_init(sup_page_table, page_hash_func, page_less_func, NULL);
 }
 
-// Destroy a page table, called when a thread exit.
+// Destroy a page table(including all fte), called when a thread exit.
 void
 page_table_free(struct hash *sup_page_table)
 {
