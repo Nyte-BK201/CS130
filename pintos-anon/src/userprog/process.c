@@ -18,7 +18,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "syscall.h"
+#include "userprog/syscall.h"
 /* ====================  Project 3 ================== */
 #include "vm/frame.h"
 #include "vm/page.h"
@@ -265,6 +265,35 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  struct thread *cur_thread = thread_current();
+  if (list_size(&cur_thread->mem_map_table) != 0)
+  {
+    for (struct list_elem *e = list_begin(&cur_thread->mem_map_table);
+          e != list_end(&cur_thread->mem_map_table);
+          e = list_next(e))
+    {
+      struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
+      /* Remove pages of the file one by one. */
+      for (uint32_t offset = 0; offset < mem_map_e->file_size; offset += PGSIZE)
+      {
+        struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->user_vaddr + offset);
+        if (spte == NULL)
+          goto done;
+        /* Write back if the page has been written */
+        if (pagedir_is_dirty(cur_thread->pagedir, spte->user_vaddr))
+        {
+          file_write_at(spte->file, spte->user_vaddr, PGSIZE, spte->offset);
+        }
+        /* Let the page die. */
+        // frame_free(spte->fte);
+        pagedir_clear_page(cur_thread->pagedir, spte->user_vaddr);
+        hash_delete(&cur_thread->sup_page_table, &spte->elem);
+        free(spte);
+        list_remove(e);
+      }
+    }
+  }
+  done:
   /* A: check child_list as a parent role */
   /* free nodes in child_list if node's child already terminated */
   lock_acquire(&cur->child_list_lock);
@@ -320,12 +349,11 @@ process_exit (void)
     file_close(cur->process_exec_file);
   }
 
-
-  /* D: destory page allocated */
-  /* Destroy the current process's page directory and switch back
+    /* D: destory page allocated */
+    /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  pd = cur->pagedir;
-  if (pd != NULL) 
+    pd = cur->pagedir;
+    if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
