@@ -223,9 +223,9 @@ _read_ (int fd, void *buffer, unsigned size){
   if(fd < 0 || fd > 129) _exit_(-1);
 
   /* Check if buffer is in the code segment, if yes then exit -1 */
-  struct sup_page_table_entry *spte = get_page_table_entry(pg_round_down(buffer));
-  if (spte != NULL && spte->file != NULL)
-    _exit_(-1);
+  // struct sup_page_table_entry *spte = get_page_table_entry(pg_round_down(buffer));
+  // if (spte != NULL && spte->file != NULL)
+    // _exit_(-1);
 
   /* check every buffer page validity */
   for(void *ptr=buffer; ptr<buffer+size; ptr+=PGSIZE){
@@ -400,9 +400,10 @@ _munmap_(mapid_t mapping)
 
           int32_t len = file_length(mem_map_e->spte->file);
           struct file *file_tp = mem_map_e->spte->file;
+          void *start_addr = mem_map_e->spte->user_vaddr;
           /* Remove pages of the file one by one. */
           for (uint32_t offset = 0; offset < len; offset += PGSIZE){
-            struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->spte->user_vaddr + offset);
+            struct sup_page_table_entry *spte = get_page_table_entry(start_addr + offset);
             // prevent a failed mapping inside
             if(spte == NULL){
               list_remove(&mem_map_e->elem);
@@ -419,8 +420,10 @@ _munmap_(mapid_t mapping)
             }
 
             /* Let the page die. */
-            frame_free(spte->fte);
-            free(spte->fte);
+            if(spte->fte){
+              frame_free(spte->fte);
+              free(spte->fte);
+            }
             pagedir_clear_page(cur_thread->pagedir, spte->user_vaddr);
             hash_delete(&cur_thread->sup_page_table, &spte->elem);
             free(spte);

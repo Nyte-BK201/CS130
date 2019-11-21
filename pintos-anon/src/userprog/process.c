@@ -270,15 +270,18 @@ process_exit (void)
   {
     /* Traverse memory map table and operate every map. */
     for (struct list_elem *e = list_begin(&cur->mem_map_table);
-          e != list_end(&cur->mem_map_table);
-          e = list_next(e))
+          e != list_end(&cur->mem_map_table); )
     {
       struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
-
+      e = list_next(e);
+      
+      int32_t len = file_length(mem_map_e->spte->file);
+      struct file *file_tp = mem_map_e->spte->file;
+      void *start_addr = mem_map_e->spte->user_vaddr;
       /* Remove pages of the file one by one. */
-      for (uint32_t offset = 0; offset < file_length(mem_map_e->spte->file); offset += PGSIZE)
+      for (uint32_t offset = 0; offset < len; offset += PGSIZE)
       {
-        struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->spte->user_vaddr + offset);
+        struct sup_page_table_entry *spte = get_page_table_entry(start_addr + offset);
         if (spte == NULL) PANIC("Mmap: A failed mapping not recycled during mmap");
 
         /* Write back if the page has been written */
@@ -288,14 +291,19 @@ process_exit (void)
         }
 
         /* Let the page die. */
-        frame_free(spte->fte);
-        free(spte->fte);
+        if(spte->fte){
+          frame_free(spte->fte);
+          free(spte->fte);
+        }
         pagedir_clear_page(cur->pagedir, spte->user_vaddr);
         hash_delete(&cur->sup_page_table, &spte->elem);
         free(spte);
       }
-
+      if(file_tp){
+        file_close(file_tp);            
+      }
       list_remove(&mem_map_e->elem);
+      free(mem_map_e);
     }
   }
 
