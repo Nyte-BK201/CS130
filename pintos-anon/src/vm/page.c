@@ -59,36 +59,26 @@ get_page_table_entry(void *user_vaddr)
 /* Add a page into current thread's sup_page_table. Return false if 
    an equal element is already in the hash table, then it will not be
    inserted. */
-bool page_add(void *user_vaddr, struct sup_page_table_entry **retval,
+bool page_add(void *user_vaddr, struct sup_page_table_entry *spte,
               struct file *file, off_t ofs, uint32_t read_bytes,
               uint32_t zero_bytes, bool writable, struct frame_table_entry *fte)
 {
   struct thread *cur_thread = thread_current();
-  struct sup_page_table_entry *sup_pt_entry = malloc(sizeof(struct sup_page_table_entry));
 
   // if(!sup_pt_entry) return false;
 
-  sup_pt_entry->user_vaddr = user_vaddr;
-  sup_pt_entry->access_time = timer_ticks();
-  sup_pt_entry->accessed = false;
-  sup_pt_entry->dirty = false;
-  sup_pt_entry->file = file;
-  sup_pt_entry->read_bytes = read_bytes;
-  sup_pt_entry->zero_bytes = zero_bytes;
-  sup_pt_entry->offset = ofs;
-  sup_pt_entry->fte = fte;
-  sup_pt_entry->writable = writable;
-
-  // Transmit the newed supplymentary page out. Used by grow_stack().
-  if (retval){
-    *retval = sup_pt_entry;
-  }
+  spte->user_vaddr = user_vaddr;
+  spte->file = file;
+  spte->read_bytes = read_bytes;
+  spte->zero_bytes = zero_bytes;
+  spte->offset = ofs;
+  spte->fte = fte;
+  spte->writable = writable;
 
   // Insert it into hash table, hash_insert() returns the old one with the same hash value.
-  if(hash_insert(&cur_thread->sup_page_table, &sup_pt_entry->elem) == NULL){
+  if(hash_insert(&cur_thread->sup_page_table, &spte->elem) == NULL){
     return true;
   }else{
-    free(sup_pt_entry);
     return false;
   }
 }
@@ -151,13 +141,15 @@ vaddr_invalid_check(void *fault_addr, void *esp)
 bool
 grow_stack(void *user_vaddr)
 {
-  struct frame_table_entry *fte = frame_allocate(PAL_ZERO | PAL_USER);
+  struct sup_page_table_entry * pte = malloc(sizeof(struct sup_page_table_entry));
+  struct frame_table_entry *fte = frame_allocate(PAL_ZERO | PAL_USER, pte);
 
-  /* Make it possible to get the new page from page_add() 
-     since the function returns a bool value. */
-  struct sup_page_table_entry * pte;
   // Add a page into page table with no file and writable.
-  page_add(user_vaddr, &pte, NULL, 0, 0, 0, 1, fte);
+  if(!page_add(user_vaddr, pte, NULL, 0, 0, 0, 1, fte)){
+    free(pte);
+    return false;
+  }
+  
   // Record the frame_table_entry it belongs to.
   pagedir_set_page(thread_current()->pagedir, pte->user_vaddr, fte->frame, 1);
   return true;
@@ -167,7 +159,9 @@ bool
 lazy_load(struct sup_page_table_entry *spte){
   // detele old fte if exsit, and allocate a new one 
   if(!spte->fte) free(spte->fte);
-  struct frame_table_entry *fte = frame_allocate(PAL_USER);
+  struct frame_table_entry *fte = frame_allocate(PAL_USER, spte);
+  if(fte == NULL) return false;
+
   spte->fte = fte;
 
   spte->file = file_reopen(spte->file);
