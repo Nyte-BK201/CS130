@@ -11,7 +11,7 @@
 
 struct sup_page_table_entry
 {
-  void *user_vaddr; /* user virtual address */
+  uint32_t *user_vaddr; /* user virtual address */
   bool writable;
   struct file *file;
   off_t offset;
@@ -23,9 +23,7 @@ struct sup_page_table_entry
 
 struct mem_map_entry
 {
-  int file_size;
-  struct file *file;
-  uint32_t *user_vaddr;
+  struct sup_page_table_entry *spte;
   mapid_t mapid;
   struct list_elem elem;
 };

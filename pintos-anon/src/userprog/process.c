@@ -276,20 +276,21 @@ process_exit (void)
       struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
 
       /* Remove pages of the file one by one. */
-      for (uint32_t offset = 0; offset < mem_map_e->file_size; offset += PGSIZE)
+      for (uint32_t offset = 0; offset < file_length(mem_map_e->spte->file); offset += PGSIZE)
       {
-        struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->user_vaddr + offset);
+        struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->spte->user_vaddr + offset);
         if (spte == NULL)
           goto done;
 
         /* Write back if the page has been written */
         if (pagedir_is_dirty(cur->pagedir, spte->user_vaddr))
         {
-          file_write_at(spte->file, spte->user_vaddr, PGSIZE, spte->offset);
+          file_write_at(spte->file, spte->user_vaddr, spte->read_bytes, spte->offset);
         }
 
         /* Let the page die. */
-        // frame_free(spte->fte);
+        frame_free(spte->fte);
+        free(spte->fte);
         pagedir_clear_page(cur->pagedir, spte->user_vaddr);
         hash_delete(&cur->sup_page_table, &spte->elem);
         free(spte);
