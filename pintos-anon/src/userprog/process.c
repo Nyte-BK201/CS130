@@ -279,8 +279,7 @@ process_exit (void)
       for (uint32_t offset = 0; offset < file_length(mem_map_e->spte->file); offset += PGSIZE)
       {
         struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->spte->user_vaddr + offset);
-        if (spte == NULL)
-          goto done;
+        if (spte == NULL) PANIC("Mmap: A failed mapping not recycled during mmap");
 
         /* Write back if the page has been written */
         if (pagedir_is_dirty(cur->pagedir, spte->user_vaddr))
@@ -294,11 +293,11 @@ process_exit (void)
         pagedir_clear_page(cur->pagedir, spte->user_vaddr);
         hash_delete(&cur->sup_page_table, &spte->elem);
         free(spte);
-        list_remove(e);
       }
+
+      list_remove(&mem_map_e->elem);
     }
   }
-  done:
 
   /* B: check child_list as a parent role */
   /* free nodes in child_list if node's child already terminated */
@@ -355,7 +354,10 @@ process_exit (void)
     file_close(cur->process_exec_file);
   }
 
-  /* E: destory page allocated */
+  /* E: recycle all virtual memories */
+  // page_table_free(&cur->sup_page_table);
+
+  /* F: destory page allocated */
   /* Destroy the current process's page directory and switch back
     to the kernel-only page directory. */
   pd = cur->pagedir;

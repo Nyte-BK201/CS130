@@ -146,7 +146,9 @@ grow_stack(void *user_vaddr)
 
   // Add a page into page table with no file and writable.
   if(!page_add(user_vaddr, pte, NULL, 0, 0, 0, 1, fte)){
+    frame_free(fte);
     free(pte);
+    free(fte);
     return false;
   }
   
