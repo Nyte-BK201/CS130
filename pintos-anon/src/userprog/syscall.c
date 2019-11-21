@@ -367,9 +367,12 @@ _mmap_(int fd, void *addr)
       return -1;
 
     /* Add the page, return -1 if fail. */
-    if (!page_add(addr + offset, NULL, curfile, offset, page_read_bytes, page_zero_bytes, true, NULL))
+    struct sup_page_table_entry *spte = malloc(sizeof(struct sup_page_table_entry));
+    if (!page_add(addr + offset, spte, curfile, offset, page_read_bytes, page_zero_bytes, true, NULL)){
+      free(spte);
       return -1;
-
+    }
+    
     offset += PGSIZE;
   }
 
