@@ -333,6 +333,7 @@ _mmap_(int fd, void *addr)
 
   struct thread *cur = thread_current();
 
+ /* Avoid multiple file map to same address. */
   for (struct list_elem *e = list_begin(&cur->mem_map_table);
        e != list_end(&cur->mem_map_table);
        e = list_next(e))
@@ -340,6 +341,7 @@ _mmap_(int fd, void *addr)
     struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
     if (addr == mem_map_e->user_vaddr) return -1;
   }
+
   /* Get the target file */
   struct file *curfile = cur->file_use[fd];
   if (curfile == NULL)
@@ -352,9 +354,9 @@ _mmap_(int fd, void *addr)
   uint32_t read_bytes = file_len;
   uint32_t offset = 0;
   while (read_bytes > 0 && offset < read_bytes){
-    /* Calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes. */
+    /* Add page into page table from FILE, one page each time.
+       We will read PAGE_READ_BYTES bytes from FILE
+       and zero the final PAGE_ZERO_BYTES bytes. */
     size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
@@ -363,12 +365,15 @@ _mmap_(int fd, void *addr)
       return -1;
     if (pagedir_get_page(cur->pagedir, addr + offset))
       return -1;
+
+    /* Add the page, return -1 if fail. */
     if (!page_add(addr + offset, NULL, curfile, offset, page_read_bytes, page_zero_bytes, true, NULL))
       return -1;
 
     offset += PGSIZE;
   }
 
+  /* Record the memory map into list. */
   struct mem_map_entry *mem_map_e = (struct mem_map_entry *)malloc(sizeof(struct mem_map_entry));
   mem_map_e->mapid = cur->mapid_suggest;
   mem_map_e->user_vaddr = addr;
@@ -384,15 +389,19 @@ static void
 _munmap_(mapid_t mapping)
 {
   struct thread *cur_thread = thread_current();
+
+  /* Traverse the memory map table to find the mapping. */
   for (struct list_elem *e = list_begin(&cur_thread->mem_map_table);
        e != list_end(&cur_thread->mem_map_table);
        e = list_next(e)){
 
         struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
         if (mem_map_e->mapid == mapping){
+
           /* Remove pages of the file one by one. */
           for (uint32_t offset = 0; offset < mem_map_e->file_size; offset += PGSIZE){
             struct sup_page_table_entry *spte = get_page_table_entry(mem_map_e->user_vaddr + offset);
+
             /* Write back if the page has been written */
             if (pagedir_is_dirty(cur_thread->pagedir, spte->user_vaddr)){
               file_write_at(spte->file, spte->user_vaddr, PGSIZE, spte->offset);
@@ -411,3 +420,4 @@ _munmap_(mapid_t mapping)
         }
       }
 }
+
