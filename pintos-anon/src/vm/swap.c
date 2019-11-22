@@ -10,6 +10,7 @@ swap_init(){
     if(!swap_block || !swap_bitmap){
         PANIC("Virtual memory: swap init failed!\n");
     }
+    bitmap_set_all(swap_bitmap,false);
 }
 
 /* swap out a given frame from physical memory to device;

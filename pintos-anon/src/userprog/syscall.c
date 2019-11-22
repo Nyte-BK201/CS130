@@ -37,6 +37,8 @@ static void _close_ (int fd);
 static mapid_t _mmap_ (int fd, void *addr );
 static void _munmap_ (mapid_t mapping);
 
+uint32_t *esp;
+
 /* return true if a pointer is valid */
 bool check_ptr(char *ptr){
   if(ptr == NULL || !is_user_vaddr(ptr) || ptr < ADDR_UNDER_CODE_SEG)
@@ -81,6 +83,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   /* Calculate stack pointer in 4 bytes */
   int *sp = (int *)f->esp;
+  esp = sp;
   check_ptr_length(sp, 4);
 
   int call = *sp;
@@ -222,14 +225,16 @@ _read_ (int fd, void *buffer, unsigned size){
   if(fd == STDOUT_FILENO) _exit_(-1);
   if(fd < 0 || fd > 129) _exit_(-1);
 
-  /* Check if buffer is in the code segment, if yes then exit -1 */
-  // struct sup_page_table_entry *spte = get_page_table_entry(pg_round_down(buffer));
-  // if (spte != NULL && spte->file != NULL)
-    // _exit_(-1);
-
   /* check every buffer page validity */
-  for(void *ptr=buffer; ptr<buffer+size; ptr+=PGSIZE){
-    check_ptr(ptr);
+  for(void *ptr=pg_round_down(buffer); ptr<buffer+size; ptr+=PGSIZE){
+    if(ptr == NULL || !is_user_vaddr(ptr) || ptr < ADDR_UNDER_CODE_SEG) _exit_(-1);
+
+    struct sup_page_table_entry *spte = get_page_table_entry(buffer);
+    if(spte != NULL && spte->writable == false) _exit_(-1);
+
+    if(pagedir_get_page(thread_current()->pagedir,ptr)==NULL && !page_fault_handler(true,true,true,ptr,esp)){
+      _exit_(-1);
+    }
   }
 
   int res = 0;

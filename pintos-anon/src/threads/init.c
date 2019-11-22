@@ -30,6 +30,7 @@
 #include "userprog/tss.h"
 #else
 #include "tests/threads/tests.h"
+#include "vm/swap.h"
 #endif
 #ifdef FILESYS
 #include "devices/block.h"
@@ -126,7 +127,7 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
-
+  swap_init();
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */
