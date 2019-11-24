@@ -142,7 +142,7 @@ frame_evict(void)
           }else{
           // swap
             fte->spte->type = SWAP;
-            fte->spte->swap_bitmap_index = swap_out(fte);
+            fte->spte->swap_bitmap_index = swap_out(upage);
           }
         }
 

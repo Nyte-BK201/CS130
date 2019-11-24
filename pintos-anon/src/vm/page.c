@@ -138,13 +138,14 @@ page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, vo
       bool status = lazy_load(spte);
       spte->pinned = false;
       return status;
-    }else if(spte == SWAP){
+    }else if(spte->type == SWAP){
     /* B2: swapped. A modified page in the disk, we should swap it back */
       bool status = swap_page(spte);
       spte->pinned = false;
       return status;
     }
 
+    // unreachable here
     spte->pinned = false;
   }
 
@@ -202,8 +203,12 @@ swap_page(struct sup_page_table_entry *spte){
   struct frame_table_entry *fte = frame_allocate(PAL_USER, spte);
   if(fte == NULL) return false;
 
-  swap_in(fte,spte->swap_bitmap_index);
-  spte->swap_bitmap_index = -1;
+  bool st = install_page(spte->user_vaddr,fte->frame,spte->writable);
+  if(st){
+    swap_in(spte->user_vaddr,spte->swap_bitmap_index);
+    spte->swap_bitmap_index = -1;
+    return true;
+  }
 
-  return install_page(spte->user_vaddr,fte->frame,spte->writable);
+  return false;
 }

@@ -22,9 +22,9 @@ swap_init(){
 /* swap out a given frame from physical memory to device;
     panic if something goes wrong */
 size_t
-swap_out(struct frame_table_entry *fte){
+swap_out(void *frame){
     if(!swap_block || !swap_bitmap) PANIC("Virtual memory: swap init failed");
-    ASSERT(fte->frame!= NULL);
+    // ASSERT(fte->frame!= NULL);
     lock_acquire(&swap_lock);
 
     // find a free place in bitmap to put frame
@@ -33,7 +33,7 @@ swap_out(struct frame_table_entry *fte){
 
     // write to disk sector by sector until full frame finished
     for(int i=0;i<NUM_PER_PAGE;i++){
-        block_write(swap_block,index*NUM_PER_PAGE+i,fte->frame+i*BLOCK_SECTOR_SIZE);
+        block_write(swap_block,index*NUM_PER_PAGE+i,frame+i*BLOCK_SECTOR_SIZE);
     }
 
     lock_release(&swap_lock);
@@ -43,7 +43,7 @@ swap_out(struct frame_table_entry *fte){
 /* swap in a given frame from device to physical memory;
     panic if something goes wrong */
 void
-swap_in(struct frame_table_entry *fte, size_t index){
+swap_in(void *frame, size_t index){
     if(!swap_block || !swap_bitmap) PANIC("Virtual memory: swap init failed");
     ASSERT(fte->frame != NULL);
     lock_acquire(&swap_lock);
@@ -53,7 +53,7 @@ swap_in(struct frame_table_entry *fte, size_t index){
     if(ind == BITMAP_ERROR) PANIC("Virtual memory: swap out frame not found!\n");
 
     for(int i=0;i<NUM_PER_PAGE;i++){
-        block_read(swap_block,index*NUM_PER_PAGE+i,fte->frame+i*BLOCK_SECTOR_SIZE);
+        block_read(swap_block,index*NUM_PER_PAGE+i,frame+i*BLOCK_SECTOR_SIZE);
     }
 
     lock_release(&swap_lock);

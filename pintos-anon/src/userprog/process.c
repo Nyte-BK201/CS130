@@ -291,10 +291,10 @@ process_exit (void)
         }
 
         /* Let the page die. */
-        void *upage = pagedir_get_page(cur_thread->pagedir, spte->user_vaddr);
+        void *upage = pagedir_get_page(cur->pagedir, spte->user_vaddr);
         if(upage != NULL){
           frame_free_user_addr(spte->user_vaddr);
-          pagedir_clear_page(cur_thread->pagedir, spte->user_vaddr);
+          pagedir_clear_page(cur->pagedir, spte->user_vaddr);
         }
 
         hash_delete(&cur->sup_page_table, &spte->elem);

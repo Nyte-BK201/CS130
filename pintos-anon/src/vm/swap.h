@@ -11,7 +11,7 @@ struct block *swap_block;
 struct bitmap *swap_bitmap;
 
 void swap_init();
-void swap_in(struct frame_table_entry *, size_t index);
-size_t swap_out(struct frame_table_entry *);
+void swap_in(void *, size_t index);
+size_t swap_out(void *);
 
 #endif /* vm/swap.h */
