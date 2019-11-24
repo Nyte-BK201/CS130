@@ -116,6 +116,7 @@ frame_evict(void)
 {
   bool found = false;
   lock_acquire(&frame_lock);
+  lock_acquire(&file_lock);
 
   while(!found){
     struct list_elem *e = list_head(&frame_table);
@@ -138,9 +139,7 @@ frame_evict(void)
         if(pagedir_is_dirty(pd,upage)){
           // mmap
           if(fte->spte->type == MMAP){
-            lock_acquire(&file_lock);
             file_write_at(fte->spte->file,fte->frame,fte->spte->read_bytes,fte->spte->offset);
-            lock_release(&file_lock);
           }else{
           // swap
             fte->spte->type = SWAP;
@@ -159,5 +158,6 @@ frame_evict(void)
     }
   }
 
+  lock_release(&file_lock);
   lock_release(&frame_lock);
 }
