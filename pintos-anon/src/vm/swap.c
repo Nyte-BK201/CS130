@@ -45,7 +45,7 @@ swap_out(void *frame){
 void
 swap_in(void *frame, size_t index){
     if(!swap_block || !swap_bitmap) PANIC("Virtual memory: swap init failed");
-    ASSERT(fte->frame != NULL);
+    // ASSERT(fte->frame != NULL);
     lock_acquire(&swap_lock);
 
     // find the given frame

@@ -149,7 +149,9 @@ frame_evict(void)
         }
 
         pagedir_clear_page(pd,upage);
-        frame_free(fte);
+        list_remove(&fte->elem);
+        palloc_free_page(fte->frame);
+        free(fte);
 
         found = true;
         break;
