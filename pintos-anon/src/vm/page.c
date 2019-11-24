@@ -35,18 +35,10 @@ page_less_func(const struct hash_elem *a,
 static void page_destroy_func(struct hash_elem *e, void *aux UNUSED)
 {
   struct sup_page_table_entry *spte = hash_entry(e, struct sup_page_table_entry, elem);
-  if(spte->fte != NULL){
-    // in physical memory
-    if(spte->fte->swap_bitmap_index == -1){
-      frame_free(spte->fte);
-      pagedir_clear_page(thread_current()->pagedir, spte->user_vaddr);
-    }else{
-    // in swap slot 
-      swap_in(spte->fte);
-      palloc_free_page(spte->fte->frame);
-      pagedir_clear_page(thread_current()->pagedir, spte->user_vaddr);
-    }
-    free(spte->fte);
+  void *frame = pagedir_get_page(thread_current()->pagedir, spte->user_vaddr);
+  if(frame != NULL){
+    frame_free_user_addr(frame);
+    pagedir_clear_page(thread_current()->pagedir, spte->user_vaddr);
   }
   free(spte);
 }
@@ -85,7 +77,7 @@ get_page_table_entry(void *user_vaddr)
    inserted. */
 bool page_add(void *user_vaddr, struct sup_page_table_entry *spte,
               struct file *file, off_t ofs, uint32_t read_bytes,
-              uint32_t zero_bytes, bool writable, struct frame_table_entry *fte)
+              uint32_t zero_bytes, bool writable)
 {
   struct thread *cur_thread = thread_current();
 
@@ -96,8 +88,11 @@ bool page_add(void *user_vaddr, struct sup_page_table_entry *spte,
   spte->read_bytes = read_bytes;
   spte->zero_bytes = zero_bytes;
   spte->offset = ofs;
-  spte->fte = fte;
   spte->writable = writable;
+  spte->pinned = false;
+  spte->swap_bitmap_index = -1;
+
+  if(file != NULL) spte->type = LAZY;
 
   // Insert it into hash table, hash_insert() returns the old one with the same hash value.
   if(hash_insert(&cur_thread->sup_page_table, &spte->elem) == NULL){
@@ -119,9 +114,9 @@ page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, vo
     return false;
   }
 
-  struct sup_page_table_entry *sup_pt_entry = get_page_table_entry(fault_addr);
+  struct sup_page_table_entry *spte = get_page_table_entry(fault_addr);
   // A: a page fault with an address not in the virtual page table
-  if (sup_pt_entry == NULL){
+  if (spte == NULL){
     if (fault_addr < (esp - 32)){
       /* A1: Invalid address usage.
          An address that does not appear to be a stack access.
@@ -134,15 +129,23 @@ page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, vo
 
   // B: a page fault with an address in the virtual page table but evicted
   }else{
-    /* B1: lazy load/ the frame is evicted but not in disk.
+    // pin it in case sync problem
+    spte->pinned = true;
+    /* B1: lazy load/mmap the frame is evicted but not in disk.
        We allocate a frame and read the file into it again.
       */
-    if(sup_pt_entry->fte == NULL || sup_pt_entry->fte->swap_bitmap_index == -1){
-      return lazy_load(sup_pt_entry);
-    }else{
+    if(spte->type == LAZY || spte->type == MMAP){
+      bool status = lazy_load(spte);
+      spte->pinned = false;
+      return status;
+    }else if(spte == SWAP){
     /* B2: swapped. A modified page in the disk, we should swap it back */
-      return swap_page(sup_pt_entry);
+      bool status = swap_page(spte);
+      spte->pinned = false;
+      return status;
     }
+
+    spte->pinned = false;
   }
 
   // situation not matched to any of the above kinds
@@ -168,44 +171,39 @@ grow_stack(void *user_vaddr)
   struct frame_table_entry *fte = frame_allocate(PAL_ZERO | PAL_USER, spte);
 
   // Add a page into page table with no file and writable.
-  if(!page_add(user_vaddr, spte, NULL, 0, 0, 0, 1, fte)){
+  if(!page_add(user_vaddr, spte, NULL, 0, 0, 0, 1)){
     frame_free(fte);
     free(spte);
-    free(fte);
     return false;
   }
   
-  return install_page(spte->user_vaddr,spte->fte->frame,spte->writable);
+  if(!intr_context ()) spte->pinned = true;
+
+  spte->type = SWAP;
+  return install_page(spte->user_vaddr,fte->frame,spte->writable);
 }
 
 bool
 lazy_load(struct sup_page_table_entry *spte){
-  // detele old fte if exsit, and allocate a new one 
-  if(!spte->fte) free(spte->fte);
   struct frame_table_entry *fte = frame_allocate(PAL_USER, spte);
   if(fte == NULL) return false;
 
-  spte->fte = fte;
-
-  spte->file = file_reopen(spte->file);
+  // spte->file = file_reopen(spte->file);
   file_read_at(spte->file, fte->frame, spte->read_bytes, spte->offset);
 
   // Make the spare part of frame to be all zero.
   memset(fte->frame + (spte->read_bytes), 0, spte->zero_bytes);
 
-  return install_page(spte->user_vaddr,spte->fte->frame,spte->writable);
+  return install_page(spte->user_vaddr,fte->frame,spte->writable);
 }
 
 bool
 swap_page(struct sup_page_table_entry *spte){
   struct frame_table_entry *fte = frame_allocate(PAL_USER, spte);
-  fte->swap_bitmap_index = spte->fte->swap_bitmap_index;
+  if(fte == NULL) return false;
 
-  // remove old one, switch to new one
-  free(spte->fte);
-  spte->fte = fte;
+  swap_in(fte,spte->swap_bitmap_index);
+  spte->swap_bitmap_index = -1;
 
-  swap_in(spte->fte);
-
-  return install_page(spte->user_vaddr,spte->fte->frame,spte->writable);
+  return install_page(spte->user_vaddr,fte->frame,spte->writable);
 }

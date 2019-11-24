@@ -9,6 +9,13 @@
 #include "filesys/file.h"
 #include "vm/frame.h"
 
+enum spte_type{
+  ERROR = 0,
+  SWAP = 1,
+  LAZY = 2, 
+  MMAP = 3
+};
+
 struct sup_page_table_entry
 {
   uint32_t *user_vaddr; /* user virtual address */
@@ -17,7 +24,9 @@ struct sup_page_table_entry
   off_t offset;
   uint32_t read_bytes;
   uint32_t zero_bytes;
-  struct frame_table_entry *fte;
+  enum spte_type type;
+  bool pinned;
+  size_t swap_bitmap_index; // denote the index of bitmap if swapped
   struct hash_elem elem; /* hash elem for hash table */
 };
 
@@ -33,7 +42,7 @@ void page_table_free(struct hash *);
 struct sup_page_table_entry *get_page_table_entry(void *);
 bool page_add(void *, struct sup_page_table_entry *,
               struct file *, off_t, uint32_t,
-              uint32_t, bool, struct frame_table_entry *);
+              uint32_t, bool);
 bool page_fault_handler(bool, bool, bool, void *, void *);
 bool vaddr_invalid_check(void *, void *);
 bool grow_stack(void *);

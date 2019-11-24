@@ -694,7 +694,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       */ 
       /* new implementation: load lazily */
       struct sup_page_table_entry *spte = malloc(sizeof(struct sup_page_table_entry));
-      if(!page_add(upage, spte, file, ofs, page_read_bytes, page_zero_bytes, writable, NULL)){
+      if(!page_add(upage, spte, file, ofs, page_read_bytes, page_zero_bytes, writable)){
         free(spte);
         return false;
       }
@@ -727,14 +727,13 @@ setup_stack (void **esp)
   success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, fte->frame, true);
   if (success){
     *esp = PHYS_BASE;
-    success = page_add(((uint8_t *) PHYS_BASE) - PGSIZE,spte,NULL,0,0,0,1,fte);
+    success = page_add(((uint8_t *) PHYS_BASE) - PGSIZE,spte,NULL,0,0,0,1);
   }
 
   // install_page fail or page_add fail
   if(!success){
     frame_free (fte->frame);
     free(spte);
-    free(fte);
   }
   
   return success;

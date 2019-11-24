@@ -365,7 +365,7 @@ _mmap_(int fd, void *addr)
     struct sup_page_table_entry *spte = malloc(sizeof(struct sup_page_table_entry));
     /* Ensure that there is enough space to map. */
     if (get_page_table_entry(addr + offset) || pagedir_get_page(cur->pagedir, addr + offset)
-      || !page_add(addr + offset, spte, curfile, offset, page_read_bytes, page_zero_bytes, true, NULL)){
+      || !page_add(addr + offset, spte, curfile, offset, page_read_bytes, page_zero_bytes, true)){
       _munmap_(mem_map_e->mapid);
       free(spte);
       return -1;
@@ -419,17 +419,20 @@ _munmap_(mapid_t mapping)
               return;
             }
 
+            spte->pinned = true;
+
             /* Write back if the page has been written */
             if (pagedir_is_dirty(cur_thread->pagedir, spte->user_vaddr)){
               file_write_at(spte->file, spte->user_vaddr, spte->read_bytes, spte->offset);
             }
 
             /* Let the page die. */
-            if(spte->fte){
-              frame_free(spte->fte);
-              free(spte->fte);
+            void *upage = pagedir_get_page(cur_thread->pagedir, spte->user_vaddr);
+            if(upage != NULL){
+              frame_free_user_addr(spte->user_vaddr);
+              pagedir_clear_page(cur_thread->pagedir, spte->user_vaddr);
             }
-            pagedir_clear_page(cur_thread->pagedir, spte->user_vaddr);
+
             hash_delete(&cur_thread->sup_page_table, &spte->elem);
             free(spte);
           }
