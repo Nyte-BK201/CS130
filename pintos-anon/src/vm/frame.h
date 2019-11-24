@@ -8,6 +8,7 @@
 #include "userprog/pagedir.h"
 #include "vm/swap.h"
 #include "vm/page.h"
+#include "userprog/syscall.h"
 
 struct frame_table_entry
 {

@@ -266,6 +266,7 @@ process_exit (void)
   uint32_t *pd;
 
   /* A： Remove memory map and unmap all pages. */
+  lock_acquire(&file_lock);
   if (list_size(&cur->mem_map_table) != 0)
   {
     /* Traverse memory map table and operate every map. */
@@ -307,6 +308,7 @@ process_exit (void)
       free(mem_map_e);
     }
   }
+  lock_release(&file_lock);
 
   /* B: check child_list as a parent role */
   /* free nodes in child_list if node's child already terminated */
@@ -352,6 +354,7 @@ process_exit (void)
   }
 
   /* D: close all opened files */
+  lock_acquire(&file_lock);
   for(int fd=2;fd<130;fd++){
     if(cur->file_use[fd] != NULL){
       file_close (cur->file_use[fd]);
@@ -362,6 +365,7 @@ process_exit (void)
     file_allow_write(cur->process_exec_file);
     file_close(cur->process_exec_file);
   }
+  lock_release(&file_lock);
 
   /* E: recycle all virtual memories: frames/ swap/ page_table
     (F will do the rest pagedir_destory) */
@@ -495,7 +499,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire(&file_lock);
   file = filesys_open (file_name);
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -586,6 +592,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   // file_close (file);
+  lock_release(&file_lock);
   return success;
 }
 

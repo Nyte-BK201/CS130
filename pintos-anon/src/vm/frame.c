@@ -138,7 +138,9 @@ frame_evict(void)
         if(pagedir_is_dirty(pd,upage)){
           // mmap
           if(fte->spte->type == MMAP){
+            lock_acquire(&file_lock);
             file_write_at(fte->spte->file,fte->frame,fte->spte->read_bytes,fte->spte->offset);
+            lock_release(&file_lock);
           }else{
           // swap
             fte->spte->type = SWAP;

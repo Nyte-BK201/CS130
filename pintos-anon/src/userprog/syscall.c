@@ -75,6 +75,7 @@ bool check_ptr_char(char *ptr){
 void
 syscall_init (void) 
 {
+  lock_init(&file_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -172,13 +173,21 @@ _wait_(pid_t pid){
 static bool
 _create_(const char *file, unsigned initial_size){
   check_ptr_char(file);
-  return(filesys_create(file,initial_size));
+  
+  lock_acquire(&file_lock);
+  bool ret = filesys_create(file,initial_size);
+  lock_release(&file_lock);
+
+  return ret;
 }
 
 static bool
 _remove_ (const char *file){
   check_ptr_char(file);
-  return(filesys_remove(file));
+  lock_acquire(&file_lock);
+  bool ret = filesys_remove(file);
+  lock_release(&file_lock);
+  return ret;
 }
 
 static int
@@ -189,7 +198,9 @@ _open_ (const char *file){
   struct thread *cur = thread_current();
 
   /* Open the file as the given name */
+  lock_acquire(&file_lock);
   struct file *curfile = filesys_open(file);
+  lock_release(&file_lock);
 
   /* Check if the file is opened */
   if (!curfile){
@@ -217,7 +228,10 @@ _filesize_ (int fd){
   if(curfile == NULL) _exit_(-1);
 
   /* Calculate the size */
-  return (file_length(curfile));
+  lock_acquire(&file_lock);
+  int ret = file_length(curfile);
+  lock_release(&file_lock);
+  return ret;
 }
 
 static int
@@ -251,7 +265,9 @@ _read_ (int fd, void *buffer, unsigned size){
     struct file *curfile = thread_current()->file_use[fd];
     if(curfile == NULL) _exit_(-1);
 
+    lock_acquire(&file_lock);
     res = file_read(curfile, buffer, size);
+    lock_release(&file_lock);
   }
 
   return res;
@@ -276,7 +292,10 @@ _write_ (int fd, const void *buffer, unsigned size){
     struct file *curfile = thread_current()->file_use[fd];
     if(curfile == NULL) _exit_(-1);
 
-    return file_write(curfile, buffer, size);
+    lock_acquire(&file_lock);
+    int ret = file_write(curfile, buffer, size);
+    lock_release(&file_lock);
+    return ret;
   }
 }
 
@@ -291,7 +310,9 @@ _seek_ (int fd, unsigned position){
 
   /* seek */
   if (curfile){
+    lock_acquire(&file_lock);
     file_seek(curfile, position);
+    lock_release(&file_lock);
   }
 }
 
@@ -304,7 +325,10 @@ _tell_ (int fd){
   struct file *curfile = thread_current()->file_use[fd];
   if(curfile == NULL) _exit_(-1);
 
-  return file_tell(curfile);
+  lock_acquire(&file_lock);
+  unsigned ret = file_tell(curfile);
+  lock_release(&file_lock);
+  return ret;
 }
 
 static void
@@ -319,7 +343,9 @@ _close_ (int fd){
   if(curfile == NULL) _exit_(-1);
 
   /* Close the file and remove from the thread */
+  lock_acquire(&file_lock);
   file_close(curfile);
+  lock_release(&file_lock);
   cur->file_use[fd] = NULL;
 }
 
@@ -342,13 +368,20 @@ _mmap_(int fd, void *addr)
     return -1;
 
   /* Reopen a file to refresh */
+  lock_acquire(&file_lock);
   curfile = file_reopen(curfile);
-  if(curfile == NULL || file_length(curfile) == 0) return -1;
+
+  if(curfile == NULL || file_length(curfile) == 0){
+    lock_release(&file_lock);
+    return -1;
+  }
 
   uint32_t file_len = file_length(curfile);
   uint32_t read_bytes = file_len;
   uint32_t offset = 0;
 
+  lock_release(&file_lock);
+  
   /* Record the memory map into list. */
   struct mem_map_entry *mem_map_e = (struct mem_map_entry *)malloc(sizeof(struct mem_map_entry));
   mem_map_e->mapid = cur->mapid_suggest;
@@ -390,6 +423,7 @@ _munmap_(mapid_t mapping)
   struct thread *cur_thread = thread_current();
 
   /* Traverse the memory map table to find the mapping. */
+  lock_acquire(&file_lock);
   for (struct list_elem *e = list_begin(&cur_thread->mem_map_table);
        e != list_end(&cur_thread->mem_map_table);
        e = list_next(e)){
@@ -414,7 +448,7 @@ _munmap_(mapid_t mapping)
               list_remove(&mem_map_e->elem);
               free(mem_map_e);
               if(file_tp){
-                file_close(file_tp);            
+                file_close(file_tp);           
               }
               return;
             }
@@ -437,13 +471,14 @@ _munmap_(mapid_t mapping)
             free(spte);
           }
           if(file_tp){
-            file_close(file_tp);            
+            file_close(file_tp);  
           }
           list_remove(&mem_map_e->elem);
           free(mem_map_e);
           break;
         }
       }
-  
+
+  lock_release(&file_lock);          
 }
 

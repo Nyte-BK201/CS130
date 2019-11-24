@@ -190,7 +190,9 @@ lazy_load(struct sup_page_table_entry *spte){
   if(fte == NULL) return false;
 
   // spte->file = file_reopen(spte->file);
+  lock_acquire(&file_lock);
   file_read_at(spte->file, fte->frame, spte->read_bytes, spte->offset);
+  lock_release(&file_lock);
 
   // Make the spare part of frame to be all zero.
   memset(fte->frame + (spte->read_bytes), 0, spte->zero_bytes);
