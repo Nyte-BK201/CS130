@@ -263,6 +263,8 @@ void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
+  printf ("%s: exit(%d)\n", cur->name, cur->ret);
+
   uint32_t *pd;
 
   /* A： Remove memory map and unmap all pages. */
@@ -391,8 +393,6 @@ process_exit (void)
     pagedir_activate (NULL);
     pagedir_destroy (pd);
 
-    /* A process with pagedir must be a user process */
-    printf ("%s: exit(%d)\n", cur->name, cur->ret);
   }
 }
 
