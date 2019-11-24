@@ -153,7 +153,8 @@ page_fault (struct intr_frame *f)
      which fault_addr refers. */
 
   /* Page fault handler check if the process should be killed or grow stack */
-  bool success = page_fault_handler(not_present, write, user, fault_addr, f->esp);
+  bool success = page_fault_handler(not_present, write,
+                                    user, fault_addr, f->esp);
   if (!success){
    /* comes from kernel */
     if(!user){

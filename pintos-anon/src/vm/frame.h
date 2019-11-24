@@ -19,7 +19,8 @@ struct frame_table_entry
 };
 
 void frame_init(void);
-struct frame_table_entry *frame_allocate(enum palloc_flags flags, struct sup_page_table_entry *spte);
+struct frame_table_entry *frame_allocate(enum palloc_flags flags, 
+                                          struct sup_page_table_entry *spte);
 void frame_free(struct frame_table_entry *);
 void frame_free_user_addr(void *);
 void frame_remove_from_list(struct frame_table_entry *);

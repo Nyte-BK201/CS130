@@ -64,7 +64,7 @@ frame_free_user_addr(void *frame){
     e != list_end(&frame_table);
     e = list_next(e)){
     struct frame_table_entry *frame_temp = list_entry(e,
-                                               struct frame_table_entry, elem);
+                                            struct frame_table_entry, elem);
 
     if (frame_temp->frame == frame){
       list_remove(e);
@@ -78,11 +78,6 @@ frame_free_user_addr(void *frame){
 }
 
 /* Free the given frame and remove it from frame_table.
-  IMPORTANT: This function will not free fte;
-  !!!! We should manually free fte !!!!
-  Owner thread is in charge of fte and a fte should be freed when corresponding
-  spte is freed. We need swap_bitmap_index in fte to indicate if the frame is
-  swapped or it should be loaded from file. 
   */
 void
 frame_free(struct frame_table_entry *fte)
@@ -108,8 +103,6 @@ frame_add(void *frame, struct sup_page_table_entry *spte)
 
 /* Choose a frame to evict from the frame_table. 
    Implement a global page replacement algorithm that approximates LRU. 
-   Evicted frame will be removed from list but will not be freed. Onwer thread
-   will do this job when exiting.
    */
 void
 frame_evict(void)
@@ -121,7 +114,8 @@ frame_evict(void)
   while(!found){
     struct list_elem *e = list_head(&frame_table);
     while((e = list_next (e)) != list_end (&frame_table)){
-      struct frame_table_entry *fte = list_entry(e, struct frame_table_entry, elem);
+      struct frame_table_entry *fte = list_entry(e, struct frame_table_entry, 
+                                                  elem);
 
       // somewhere in the kernel using, we should not edit it
       if(fte->spte->pinned) continue;
@@ -139,7 +133,8 @@ frame_evict(void)
         if(pagedir_is_dirty(pd,upage)){
           // mmap
           if(fte->spte->type == MMAP){
-            file_write_at(fte->spte->file,fte->frame,fte->spte->read_bytes,fte->spte->offset);
+            file_write_at(fte->spte->file,fte->frame,
+                          fte->spte->read_bytes,fte->spte->offset);
           }else{
           // swap
             fte->spte->type = SWAP;
@@ -147,6 +142,7 @@ frame_evict(void)
           }
         }
 
+        // once swapped out, we remove the frame from physical memory
         pagedir_clear_page(pd,upage);
         list_remove(&fte->elem);
         palloc_free_page(fte->frame);

@@ -29,7 +29,8 @@ swap_out(void *frame){
 
     // find a free place in bitmap to put frame
     size_t index = bitmap_scan_and_flip(swap_bitmap,0,1,false);
-    if(index == BITMAP_ERROR) PANIC("Virtual memory: not enough disk to swap!\n");
+    if(index == BITMAP_ERROR)
+        PANIC("Virtual memory: not enough disk to swap!\n");
 
     // write to disk sector by sector until full frame finished
     for(int i=0;i<NUM_PER_PAGE;i++){
@@ -50,7 +51,8 @@ swap_in(void *frame, size_t index){
 
     // find the given frame
     size_t ind = bitmap_scan_and_flip(swap_bitmap,index,1,true);
-    if(ind == BITMAP_ERROR) PANIC("Virtual memory: swap out frame not found!\n");
+    if(ind == BITMAP_ERROR)
+        PANIC("Virtual memory: swap out frame not found!\n");
 
     for(int i=0;i<NUM_PER_PAGE;i++){
         block_read(swap_block,index*NUM_PER_PAGE+i,frame+i*BLOCK_SECTOR_SIZE);

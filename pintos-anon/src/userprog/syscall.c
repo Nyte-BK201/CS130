@@ -241,12 +241,14 @@ _read_ (int fd, void *buffer, unsigned size){
 
   /* check every buffer page validity */
   for(void *ptr=pg_round_down(buffer); ptr<buffer+size; ptr+=PGSIZE){
-    if(ptr == NULL || !is_user_vaddr(ptr) || ptr < ADDR_UNDER_CODE_SEG) _exit_(-1);
+    if(ptr == NULL || !is_user_vaddr(ptr) || ptr < ADDR_UNDER_CODE_SEG) 
+      _exit_(-1);
 
     struct sup_page_table_entry *spte = get_page_table_entry(buffer);
     if(spte != NULL && spte->writable == false) _exit_(-1);
 
-    if(pagedir_get_page(thread_current()->pagedir,ptr)==NULL && !page_fault_handler(true,true,true,ptr,esp)){
+    if(pagedir_get_page(thread_current()->pagedir,ptr)==NULL && 
+      !page_fault_handler(true,true,true,ptr,esp)){
       _exit_(-1);
     }
   }
@@ -383,7 +385,8 @@ _mmap_(int fd, void *addr)
   lock_release(&file_lock);
 
   /* Record the memory map into list. */
-  struct mem_map_entry *mem_map_e = (struct mem_map_entry *)malloc(sizeof(struct mem_map_entry));
+  struct mem_map_entry *mem_map_e = (struct mem_map_entry *)
+                                    malloc(sizeof(struct mem_map_entry));
   mem_map_e->mapid = cur->mapid_suggest;
   mem_map_e->spte = NULL;
   list_push_back(&cur->mem_map_table, &mem_map_e->elem);
@@ -395,10 +398,13 @@ _mmap_(int fd, void *addr)
     size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-    struct sup_page_table_entry *spte = malloc(sizeof(struct sup_page_table_entry));
+    struct sup_page_table_entry *spte = malloc(sizeof(
+                                              struct sup_page_table_entry));
     /* Ensure that there is enough space to map. */
-    if (get_page_table_entry(addr + offset) || pagedir_get_page(cur->pagedir, addr + offset)
-      || !page_add(addr + offset, spte, curfile, offset, page_read_bytes, page_zero_bytes, true)){
+    if (get_page_table_entry(addr + offset) || 
+        pagedir_get_page(cur->pagedir, addr + offset) ||
+        !page_add(addr + offset, spte, curfile, offset, page_read_bytes, 
+                  page_zero_bytes, true)){
       _munmap_(mem_map_e->mapid);
       free(spte);
       return -1;
@@ -428,7 +434,8 @@ _munmap_(mapid_t mapping)
        e != list_end(&cur_thread->mem_map_table);
        e = list_next(e)){
 
-        struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
+        struct mem_map_entry *mem_map_e = list_entry(
+                                            e, struct mem_map_entry, elem);
         if (mem_map_e->mapid == mapping){
           // check if the mapping is a failed mapping
           if(mem_map_e->spte == NULL){
@@ -445,7 +452,8 @@ _munmap_(mapid_t mapping)
           void *start_addr = mem_map_e->spte->user_vaddr;
           /* Remove pages of the file one by one. */
           for (uint32_t offset = 0; offset < len; offset += PGSIZE){
-            struct sup_page_table_entry *spte = get_page_table_entry(start_addr + offset);
+            struct sup_page_table_entry *spte = get_page_table_entry(
+                                                  start_addr + offset);
             // prevent a failed mapping inside
             if(spte == NULL){
               list_remove(&mem_map_e->elem);
@@ -460,11 +468,13 @@ _munmap_(mapid_t mapping)
 
             /* Write back if the page has been written */
             if (pagedir_is_dirty(cur_thread->pagedir, spte->user_vaddr)){
-              file_write_at(spte->file, spte->user_vaddr, spte->read_bytes, spte->offset);
+              file_write_at(spte->file, spte->user_vaddr, 
+                            spte->read_bytes, spte->offset);
             }
 
             /* Let the page die. */
-            void *upage = pagedir_get_page(cur_thread->pagedir, spte->user_vaddr);
+            void *upage = pagedir_get_page(cur_thread->pagedir, 
+                                            spte->user_vaddr);
             if(upage != NULL){
               frame_free_user_addr(spte->user_vaddr);
               pagedir_clear_page(cur_thread->pagedir, spte->user_vaddr);

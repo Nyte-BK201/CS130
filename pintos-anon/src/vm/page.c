@@ -17,7 +17,9 @@ install_page (void *upage, void *kpage, bool writable)
 static unsigned
 page_hash_func(const struct hash_elem *e, void *aux UNUSED)
 {
-  struct sup_page_table_entry *sup_pt_entry = hash_entry(e, struct sup_page_table_entry, elem);
+  struct sup_page_table_entry *sup_pt_entry = hash_entry(e, 
+                                                struct sup_page_table_entry,
+                                                elem);
   return hash_int((int)sup_pt_entry->user_vaddr);
 }
 
@@ -26,16 +28,24 @@ static bool
 page_less_func(const struct hash_elem *a,
                            const struct hash_elem *b, void *aux UNUSED)
 {
-  struct sup_page_table_entry *sup_pt_entry_a = hash_entry(a, struct sup_page_table_entry, elem);
-  struct sup_page_table_entry *sup_pt_entry_b = hash_entry(b, struct sup_page_table_entry, elem);
+  struct sup_page_table_entry *sup_pt_entry_a = hash_entry(a,
+                                                  struct sup_page_table_entry,
+                                                  elem);
+  struct sup_page_table_entry *sup_pt_entry_b = hash_entry(b,
+                                                  struct sup_page_table_entry,
+                                                  elem);
   return sup_pt_entry_a->user_vaddr < sup_pt_entry_b->user_vaddr;
 }
 
 // Get a supplymental page from hash table and destroy it.
 static void page_destroy_func(struct hash_elem *e, void *aux UNUSED)
 {
-  struct sup_page_table_entry *spte = hash_entry(e, struct sup_page_table_entry, elem);
+  struct sup_page_table_entry *spte = hash_entry(e, 
+                                        struct sup_page_table_entry,
+                                        elem);
   void *frame = pagedir_get_page(thread_current()->pagedir, spte->user_vaddr);
+
+  // if this page's frame is in physical memory, we free it
   if(frame != NULL){
     frame_free_user_addr(frame);
     pagedir_clear_page(thread_current()->pagedir, spte->user_vaddr);
@@ -66,7 +76,8 @@ get_page_table_entry(void *user_vaddr)
 
   // Find the hash elem by key = user_vaddr
   sup_pt_entry.user_vaddr = user_vaddr - ((unsigned)user_vaddr % 4096);
-  struct hash_elem *e = hash_find(&(thread_current()->sup_page_table), &(sup_pt_entry.elem));
+  struct hash_elem *e = hash_find(&(thread_current()->sup_page_table), 
+                                  &(sup_pt_entry.elem));
 
   // Return the entry or NULL if it isn't found.
   return e == NULL ? NULL : hash_entry(e, struct sup_page_table_entry, elem);
@@ -94,7 +105,9 @@ bool page_add(void *user_vaddr, struct sup_page_table_entry *spte,
 
   if(file != NULL) spte->type = LAZY;
 
-  // Insert it into hash table, hash_insert() returns the old one with the same hash value.
+  /* Insert it into hash table, 
+      hash_insert() returns the old one with the same hash value.
+      */
   if(hash_insert(&cur_thread->sup_page_table, &spte->elem) == NULL){
     return true;
   }else{
@@ -107,7 +120,8 @@ bool page_add(void *user_vaddr, struct sup_page_table_entry *spte,
    and allow the process to continue as normal (rather than killing the thread) 
    after the page fault handler finishes. Return true if it doesn't need kill.*/
 bool
-page_fault_handler(bool not_present, bool write, bool user, void *fault_addr, void *esp)
+page_fault_handler(bool not_present, bool write, bool user,
+                    void *fault_addr, void *esp)
 {
   // invalid address 
   if (!user || vaddr_invalid_check(fault_addr, esp) || !not_present){
@@ -168,7 +182,8 @@ vaddr_invalid_check(void *fault_addr, void *esp)
 bool
 grow_stack(void *user_vaddr)
 {
-  struct sup_page_table_entry * spte = malloc(sizeof(struct sup_page_table_entry));
+  struct sup_page_table_entry * spte = malloc(sizeof(
+                                        struct sup_page_table_entry));
   struct frame_table_entry *fte = frame_allocate(PAL_ZERO | PAL_USER, spte);
 
   // Add a page into page table with no file and writable.

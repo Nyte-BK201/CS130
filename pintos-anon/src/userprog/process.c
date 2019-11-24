@@ -275,7 +275,8 @@ process_exit (void)
     for (struct list_elem *e = list_begin(&cur->mem_map_table);
           e != list_end(&cur->mem_map_table); )
     {
-      struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
+      struct mem_map_entry *mem_map_e = list_entry(
+                                          e, struct mem_map_entry, elem);
       e = list_next(e);
       
       mem_map_e->spte->pinned = true;
@@ -285,15 +286,20 @@ process_exit (void)
       /* Remove pages of the file one by one. */
       for (uint32_t offset = 0; offset < len; offset += PGSIZE)
       {
-        struct sup_page_table_entry *spte = get_page_table_entry(start_addr + offset);
+        struct sup_page_table_entry *spte = get_page_table_entry(
+                                              start_addr + offset);
+
+        // pin it in case an interrupt happens, it may be evicted
         spte->pinned = true;
 
-        if (spte == NULL) PANIC("Mmap: A failed mapping not recycled during mmap");
+        if (spte == NULL) 
+          PANIC("Mmap: A failed mapping not recycled during mmap");
 
         /* Write back if the page has been written */
         if (pagedir_is_dirty(cur->pagedir, spte->user_vaddr))
         {
-          file_write_at(spte->file, spte->user_vaddr, spte->read_bytes, spte->offset);
+          file_write_at(spte->file, spte->user_vaddr, 
+                        spte->read_bytes, spte->offset);
         }
 
         /* Let the page die. */
@@ -682,30 +688,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* old implementation: load immediately
-      // Get a page of memory.
-      uint8_t *kpage = frame_allocate (PAL_USER);
-      if (kpage == NULL)
-        return false;
-
-      // Load this page.
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          frame_free (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      // Add the page to the process's address space.
-      if (!install_page (upage, kpage, writable)) 
-        {
-          frame_free (kpage);
-          return false; 
-        }
-      */ 
       /* new implementation: load lazily */
-      struct sup_page_table_entry *spte = malloc(sizeof(struct sup_page_table_entry));
-      if(!page_add(upage, spte, file, ofs, page_read_bytes, page_zero_bytes, writable)){
+      struct sup_page_table_entry *spte = malloc(sizeof(
+                                                struct sup_page_table_entry));
+      if(!page_add(upage, spte, file, ofs, page_read_bytes, 
+                    page_zero_bytes, writable)){
         free(spte);
         return false;
       }
@@ -726,7 +713,8 @@ setup_stack (void **esp)
 {
   bool success = false;
 
-  struct sup_page_table_entry *spte = malloc(sizeof(struct sup_page_table_entry));
+  struct sup_page_table_entry *spte = malloc(sizeof(
+                                            struct sup_page_table_entry));
   if(spte == NULL) return false;
 
   struct frame_table_entry *fte = frame_allocate (PAL_USER | PAL_ZERO, spte);
