@@ -381,7 +381,7 @@ _mmap_(int fd, void *addr)
   uint32_t offset = 0;
 
   lock_release(&file_lock);
-  
+
   /* Record the memory map into list. */
   struct mem_map_entry *mem_map_e = (struct mem_map_entry *)malloc(sizeof(struct mem_map_entry));
   mem_map_e->mapid = cur->mapid_suggest;
@@ -436,6 +436,9 @@ _munmap_(mapid_t mapping)
             free(mem_map_e);
             return;
           }
+
+          // pin it until it get recycled
+          mem_map_e->spte->pinned = true;
 
           int32_t len = file_length(mem_map_e->spte->file);
           struct file *file_tp = mem_map_e->spte->file;

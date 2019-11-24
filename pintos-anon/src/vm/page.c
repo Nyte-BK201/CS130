@@ -178,7 +178,6 @@ grow_stack(void *user_vaddr)
     return false;
   }
   
-  if(!intr_context ()) spte->pinned = true;
 
   spte->type = SWAP;
   return install_page(spte->user_vaddr,fte->frame,spte->writable);

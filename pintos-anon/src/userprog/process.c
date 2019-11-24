@@ -276,6 +276,7 @@ process_exit (void)
       struct mem_map_entry *mem_map_e = list_entry(e, struct mem_map_entry, elem);
       e = list_next(e);
       
+      mem_map_e->spte->pinned = true;
       int32_t len = file_length(mem_map_e->spte->file);
       struct file *file_tp = mem_map_e->spte->file;
       void *start_addr = mem_map_e->spte->user_vaddr;
@@ -283,6 +284,8 @@ process_exit (void)
       for (uint32_t offset = 0; offset < len; offset += PGSIZE)
       {
         struct sup_page_table_entry *spte = get_page_table_entry(start_addr + offset);
+        spte->pinned = true;
+
         if (spte == NULL) PANIC("Mmap: A failed mapping not recycled during mmap");
 
         /* Write back if the page has been written */
