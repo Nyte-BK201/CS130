@@ -44,8 +44,7 @@ bool check_ptr(char *ptr){
   if(ptr == NULL || !is_user_vaddr(ptr) || ptr < ADDR_UNDER_CODE_SEG)
     _exit_(-1);
 
-  if(pagedir_get_page(thread_current()->pagedir,ptr) == NULL &&
-    !page_fault_handler(true,true,true,ptr,esp)){
+  if(pagedir_get_page(thread_current()->pagedir,ptr) == NULL){
     _exit_(-1);
   }
 
