@@ -124,16 +124,19 @@ page_fault_handler(bool not_present, bool write, bool user,
                     void *fault_addr, void *esp)
 {
   // invalid address 
-  if (!user || vaddr_invalid_check(fault_addr, esp) || !not_present){
+  if (vaddr_invalid_check(fault_addr, esp) || !not_present){
     return false;
   }
 
   struct sup_page_table_entry *spte = get_page_table_entry(fault_addr);
   // A: a page fault with an address not in the virtual page table
   if (spte == NULL){
-    if (fault_addr < (esp - 32)){
+    /* impose a 8MB limitation to stack growth */
+    if (fault_addr < (esp - 32) || 
+        PHYS_BASE - pg_round_down(fault_addr) > (8 * (1 << 20))){
       /* A1: Invalid address usage.
-         An address that does not appear to be a stack access.
+         An address that does not appear to be a stack access or over the 
+         8MB limitation.
         */
       return false;
     }else{

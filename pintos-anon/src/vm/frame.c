@@ -130,7 +130,7 @@ frame_evict(void)
       // vicvim found
 
         // check if vicvim needs swap or mmap needs write back
-        if(pagedir_is_dirty(pd,upage)){
+        if(pagedir_is_dirty(pd,upage) || fte->spte->type == SWAP){
           // mmap
           if(fte->spte->type == MMAP){
             file_write_at(fte->spte->file,fte->frame,

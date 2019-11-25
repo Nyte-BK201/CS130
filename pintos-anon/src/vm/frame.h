@@ -12,10 +12,10 @@
 
 struct frame_table_entry
 {
-  void *frame;
-  struct thread *thread;
-  struct sup_page_table_entry *spte;
-  struct list_elem elem;
+  void *frame;                        /* physical memory */
+  struct thread *thread;              /* onwer thread */
+  struct sup_page_table_entry *spte;  /* corresponding spte if needed */
+  struct list_elem elem;              /* list elem for frame_table */
 };
 
 void frame_init(void);

@@ -1,0 +1,350 @@
+        +---------------------------+
+		    | CS 140                    |
+		    | PROJECT 3: VIRTUAL MEMORY	|
+		    |	DESIGN DOCUMENT           |
+		    +---------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Zhongyue Lin <linzhy@shanghaitech.edu.cn>
+Mengyin Wu <wumy1@shanghaitech.edu.cn>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+Pintos Guide by Stephen Tsung-Han Sher:
+    https://static1.squarespace.com/static/5b18aa0955b02c1de94e4412/t/
+    5b85fad2f950b7b16b7a2ed6/1535507195196/Pintos+Guide
+PintosProject#3VirtualMemoryManagement Tutorial:
+    https://wenku.baidu.com/view/e8ae06a9f7ec4afe05a1df55.html
+
+			PAGE TABLE MANAGEMENT
+			=====================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+vm/page.h:
+
+enum spte_type{
+  ERROR = 0, /* remained, but not using */
+  SWAP = 1, /* in the disk */
+  LAZY = 2, /* in file, but not loaded */
+  MMAP = 3  /* memory mapping type */
+};
+
+struct sup_page_table_entry
+{
+  uint32_t *user_vaddr; /* user virtual address */
+  bool writable;        /* true if writable */
+
+  /* file usage */
+  struct file *file;    /* file recorded to use in lazy load or mmap */
+  off_t offset;         /* offset in file */
+  uint32_t read_bytes;  /* the bytes for this page to read */
+  uint32_t zero_bytes;  /* fill the rest of the page */
+
+  enum spte_type type;
+  bool pinned;          /* pinned when kernel wants to edit a spte */
+  size_t swap_bitmap_index; /* denote the index of bitmap if swapped */
+  struct hash_elem elem; /* hash elem for hash table */
+};
+
+vm/frame.h:
+
+struct frame_table_entry
+{
+  void *frame;                        /* physical memory */
+  struct thread *thread;              /* onwer thread */
+  struct sup_page_table_entry *spte;  /* corresponding spte if needed */
+  struct list_elem elem;              /* list elem for frame_table */
+};
+
+vm/frame.c:
+// List of all frames.
+static struct list frame_table; 
+
+// Lock to synchronize on frame table.
+static struct lock frame_lock;
+
+threads/thread.h:
+
+struct thread{
+    ...
+    struct hash sup_page_table;         /* Supplementary page table. */
+    ...
+}
+
+
+---- ALGORITHMS ----
+
+>> A2: In a few paragraphs, describe your code for accessing the data
+>> stored in the SPT about a given page.
+
+1) If page fault doesn't happen which indicates the frame is loaded in physical
+memory, with pagedir_get_page(), it functions normally without spt 
+2) A page fault happens:
+    A: It is not in supplementary page table, it must be a stack growth or 
+    invalid page fault. Palloc a new frame for the new stack page and install it
+    then return if it is valid.
+    B: A spte is found, check its type:
+        B1: It is from file(both lazy load and memory mapping). Load from file.
+        B2: It is in the swap. Palloc a new frame and swap it back to physical
+        frame.
+
+>> A3: How does your code coordinate accessed and dirty bits between
+>> kernel and user virtual addresses that alias a single frame, or
+>> alternatively how do you avoid the issue?
+
+To avoid the alias issue, only user virtual address is used even in the kernel
+mode. When page faults happens, a user virtual address is ensured to be valid to
+do anything else. 
+
+---- SYNCHRONIZATION ----
+
+>> A4: When two user processes both need a new frame at the same time,
+>> how are races avoided?
+
+A frame lock is applied in frame table editing. Every editing to frame table 
+will be synchronized by frame lock.
+On the other hand, when allocating physical memory, palloc_get_page() uses a 
+lock inside which is implemented by pintos originally.
+
+---- RATIONALE ----
+
+>> A5: Why did you choose the data structure(s) that you did for
+>> representing virtual-to-physical mappings?
+
+1) Using mechanism implemented originally. To ease the workload, we do not edit 
+original implementations of the palloc_* and pagedir_*. Encapsulate the vanilla
+page table with supplementary page table per process and manage all physical 
+frame with frame table globally significantly use the vanilla mechanism.
+2) Supporting efficient global eviction algorithm. Another choice to archive the
+goal is to implement the eviction in palloc.c which is considerable harder and 
+complex.
+3) Quick lookup with supplementary page table. Spt uses a hash table per process
+which is as efficient as vanilla pagedir, the only con is consuming more memory
+but not the very problem we focus in this project.
+
+		       PAGING TO AND FROM DISK
+		       =======================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+vm/swap.h:
+
+struct lock swap_lock;      /* a lock to edit disk */
+struct block *swap_block;   /* the device to use in vm */
+struct bitmap *swap_bitmap; /* the bitmap to indicate free sector in device */
+
+---- ALGORITHMS ----
+
+>> B2: When a frame is required but none is free, some frame must be
+>> evicted.  Describe your code for choosing a frame to evict.
+
+A second chance algorithm is applied in eviction.
+Traversing the whole frame table:
+1) If the current frame is pinned which indicates it should not be moved, skip 
+it.
+2) If the current frame is accessed, mark it as not accessed.
+3) If the current frame is not accessed, it is going to be the victim to be 
+evicted. 
+    i: it is dirty, writes to the file back if it is a memory mapping page 
+    ii: it is dirty, but not a mmap page, swap it to the disk
+    iii: not dirty, but it is swapped last time, swap it to the disk.
+    iiii: not dirty, not swapped before, the page is loaded from file, clear it
+    without any other action.
+
+>> B3: When a process P obtains a frame that was previously used by a
+>> process Q, how do you adjust the page table (and any other data
+>> structures) to reflect the frame Q no longer has?
+
+Since we use implement a spt with vanilla pagedir, use pagedir_clear_page()
+to mark it as "not present" will announce the frame is no longer held by Q 
+which will raise a page fault when Q tries to use it again. 
+
+>> B4: Explain your heuristic for deciding whether a page fault for an
+>> invalid virtual address should cause the stack to be extended into
+>> the page that faulted.
+
+To make stack growth works for PUHSA instruction, any page fault happens with 
+fault_addr > (esp - 32) is considered as valid. 
+Also a limitation of 8MB is imposed in case the stack grows out of range.
+
+---- SYNCHRONIZATION ----
+
+>> B5: Explain the basics of your VM synchronization design.  In
+>> particular, explain how it prevents deadlock.  (Refer to the
+>> textbook for an explanation of the necessary conditions for
+>> deadlock.)
+
+A: Supplementary page table is onwed by process itself, we don't need to worry
+about synchronization.
+B: Frame table is globally used, we use a frame_lock to ensure frame_table_list
+is read/write only by one process.
+C: Inside frame mechanism, the vanilla implementation of palloc_* is used, which
+has a lock inside with proper synchronizations.
+D: Swap bitmap is globally used, we use a swap_lock to ensure bitmap is 
+synchronized.
+
+To avoid deadlock, these four locks do not intersect with each other at all. 
+A process only acquires another lock after releasing last lock which do not 
+raise any dead lock in any condition.
+
+>> B6: A page fault in process P can cause another process Q's frame
+>> to be evicted.  How do you ensure that Q cannot access or modify
+>> the page during the eviction process?  How do you avoid a race
+>> between P evicting Q's frame and Q faulting the page back in?
+
+When evicting a frame, we checks if it is pinned which indicates it should not
+be moved. To avoid the race, we pins a page to ignore it when we are in kernel
+mode including page fault handler and syscall. However the synchronization here
+might be weak and could have problems when there are many threads, a wholy 
+solution could be complex and the current solution works well with a lots 
+testing. There is small possibility that before mark pagedir as not present and
+after swapping a page to disk and in this small gap, process Q modifies it.
+
+Also, it could happen that Q faulting the page back then P evicts it immediatly
+which results in recursion but this requires very accurate timing to page fault
+and evict. The executing time is different in these two process and external 
+interrupt timer is set periodicly which means the situation is almost impossible
+and unable to loop.
+
+>> B7: Suppose a page fault in process P causes a page to be read from
+>> the file system or swap.  How do you ensure that a second process Q
+>> cannot interfere by e.g. attempting to evict the frame while it is
+>> still being read in?
+
+Mentioned in B6, we pin it when we are handing page fault so the eviction will 
+ignore this page and choose another potential page.
+
+>> B8: Explain how you handle access to paged-out pages that occur
+>> during system calls.  Do you use page faults to bring in pages (as
+>> in user programs), or do you have a mechanism for "locking" frames
+>> into physical memory, or do you use some other design?  How do you
+>> gracefully handle attempted accesses to invalid virtual addresses?
+
+We check if it is a paged-out page first and try to load it manually without 
+triggering page fault. When loading it, we pin it to prevent eviction of syscall
+memory usage.
+
+The handle to invalid virtual address is still the same design and plus the 
+failure of the loading process.
+
+---- RATIONALE ----
+
+>> B9: A single lock for the whole VM system would make
+>> synchronization easy, but limit parallelism.  On the other hand,
+>> using many locks complicates synchronization and raises the
+>> possibility for deadlock but allows for high parallelism.  Explain
+>> where your design falls along this continuum and why you chose to
+>> design it this way.
+
+We use locks separately for frame table/ swap and etc. Every lock does not 
+intersect with each other which is super easy to manage and prevent deadlock 
+perfectly. And we use pinned flag to indicate a page should not be moved during
+syscall/ pagefault handler.
+
+			 MEMORY MAPPED FILES
+			 ===================
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+threads/thread.h:
+
+struct thread{
+    ...
+    struct list mem_map_table;          /* Memory mapping table. */
+    mapid_t mapid_suggest;              /* Next map id can be used. */
+    ...
+}
+
+vm/page.h: 
+
+struct mem_map_entry
+{
+  struct sup_page_table_entry *spte; /* points to the first page of this mmap */
+  mapid_t mapid;                     /* mapid, count from 0 */
+  struct list_elem elem;             /* list elem for this mmap */
+};
+
+---- ALGORITHMS ----
+
+>> C2: Describe how memory mapped files integrate into your virtual
+>> memory subsystem.  Explain how the page fault and eviction
+>> processes differ between swap pages and other pages.
+
+Memory mappings are exactly the same with file lazy load.
+When mmap is called, we add the first page of the contiguous mmap pages to 
+mem_map_table. These pages are lazy load which means that an access to these 
+pages will raise a page fault and bring needed content to the memory.
+
+When a mmap page is evicted, it checks pagedir_is_dirty() to see if it needs 
+writing back to the file. A unmap syscall behaves the same as evicting. Other 
+pages may be swap into disk or clear without any saving.
+
+>> C3: Explain how you determine whether a new file mapping overlaps
+>> another segment, either at the time the mapping is created or later.
+
+While adding pages to sup_page_table, we checks if the user_vaddr to be used is
+already in the supplementary page table. If there happens to be a page already 
+in the place, we know that it overlaps with something which is illegal. We 
+free the previous pages and return -1 to indicate failure.
+
+---- RATIONALE ----
+
+>> C4: Mappings created with "mmap" have similar semantics to those of
+>> data demand-paged from executables, except that "mmap" mappings are
+>> written back to their original files, not to swap.  This implies
+>> that much of their implementation can be shared.  Explain why your
+>> implementation either does or does not share much of the code for
+>> the two situations.
+
+Our implementation share the lazy load process between mmap and segment loading.
+Both mmap and executables loading use lazy load which triggers page faults later
+, so we do not need to implement some brand new code.
+Howevery, mmap is a little different with writing back on eviction so we need a
+flag of MMAP to meet this requirement specially.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

@@ -10,31 +10,34 @@
 #include "vm/frame.h"
 
 enum spte_type{
-  ERROR = 0,
-  SWAP = 1,
-  LAZY = 2, 
-  MMAP = 3
+  ERROR = 0, /* remained, but not using */
+  SWAP = 1, /* in the disk */
+  LAZY = 2, /* in file, but not loaded */
+  MMAP = 3  /* memory mapping type */
 };
 
 struct sup_page_table_entry
 {
   uint32_t *user_vaddr; /* user virtual address */
-  bool writable;
-  struct file *file;
-  off_t offset;
-  uint32_t read_bytes;
-  uint32_t zero_bytes;
+  bool writable;        /* true if writable */
+
+  /* file usage */
+  struct file *file;    /* file recorded to use in lazy load or mmap */
+  off_t offset;         /* offset in file */
+  uint32_t read_bytes;  /* the bytes for this page to read */
+  uint32_t zero_bytes;  /* fill the rest of the page */
+
   enum spte_type type;
-  bool pinned;
-  size_t swap_bitmap_index; // denote the index of bitmap if swapped
+  bool pinned;          /* pinned when kernel wants to edit a spte */
+  size_t swap_bitmap_index; /* denote the index of bitmap if swapped */
   struct hash_elem elem; /* hash elem for hash table */
 };
 
 struct mem_map_entry
 {
-  struct sup_page_table_entry *spte;
-  mapid_t mapid;
-  struct list_elem elem;
+  struct sup_page_table_entry *spte; /* points to the first page of this mmap */
+  mapid_t mapid;                     /* mapid, count from 0 */
+  struct list_elem elem;             /* list elem for this mmap */
 };
 
 void page_table_init(struct hash *);
