@@ -1,12 +1,8 @@
 #include "filesys/cache.h"
 
-struct cache_entry buffer_cache[BUFFER_CACHE_SIZE];
+struct cache_entry* buffer_cache[BUFFER_CACHE_SIZE];
 
 struct lock buffer_cache_lock;
-
-int buffer_cache_put;   /* number of sectors in cache */
-
-int buffer_cache_suggested_index;   /* the next spare index */
 
 /* Initial the buffer cache. The buffer cache is 32KB and can store
    64 sectors with each sector 512B. */
@@ -14,11 +10,12 @@ void cache_init()
 {
     lock_init(&buffer_cache_lock);
     for (int i = 0; i < BUFFER_CACHE_SIZE; i++){
-        buffer_cache[i].dirty = false;
-        buffer_cache[i].accessed = false; 
+        buffer_cache[i] = malloc(sizeof(struct cache_entry));
+        buffer_cache[i]->accessed = false;
+        buffer_cache[i]->dirty = false;
+        buffer_cache[i]->sector = -1;
+        lock_init(&buffer_cache[i]->cache_lock);
     }
-    buffer_cache_put = 0;
-    buffer_cache_suggested_index = 0;
 }
 
 /* Read a whole sector from disk to memory. Search it in buffer
@@ -27,31 +24,26 @@ void cache_init()
    sector data into the given buffer. */
 void cache_read(block_sector_t sector, void *buffer, off_t offset, size_t size)
 {
-    for (int i = 0; i < BUFFER_CACHE_SIZE; i++){
-        if (buffer_cache[i].sector == sector){
-            buffer_cache[i].accessed == true;
-            memcpy(buffer,buffer_cache[i].data,BLOCK_SECTOR_SIZE);
-            return;
-        }
-    }
+    int cache_index = cache_search(sector);
 
-    // the block is not in cache, find a spare cache or evict
-    if (buffer_cache_put = BLOCK_SECTOR_SIZE){
-        buffer_cache_evict();
-    }
+    lock_acquire(&buffer_cache_lock);
+    // not in cache
+    if (cache_index == -1){
+        // get a free index
+        cache_index = cache_evict();
 
-    // put sector into cache
-    buffer_cache[buffer_cache_suggested_index].sector = sector;
-    buffer_cache[buffer_cache_suggested_index].accessed = true;
-    buffer_cache[buffer_cache_suggested_index].dirty = false;
-    block_read(fs_device, sector, buffer_cache[buffer_cache_suggested_index].data);
+        // put sector into cache
+        lock_acquire(&buffer_cache[cache_index]->cache_lock);
+        buffer_cache[cache_index]->sector = sector;
+        buffer_cache[cache_index]->dirty = false;
+        block_read(fs_device, sector, buffer_cache[cache_index]->data);
+        lock_release(&buffer_cache[cache_index]->cache_lock);
+    }
     
     // memory read from cache
-    buffer_cache[buffer_cache_suggested_index].accessed == true;
-    memcpy(buffer, buffer_cache[buffer_cache_suggested_index].data, BLOCK_SECTOR_SIZE);
-    
-    buffer_cache_suggested_index++;
-    buffer_cache_put = buffer_cache_put < BUFFER_CACHE_SIZE ? buffer_cache_put + 1 :BUFFER_CACHE_SIZE;
+    buffer_cache[cache_index]->accessed == true;
+    memcpy(buffer, buffer_cache[cache_index]->data + offset, size);
+    lock_release(&buffer_cache_lock);
 }
 
 /* Write buffer from memory to disk. Here just write into cache
@@ -60,63 +52,84 @@ void cache_read(block_sector_t sector, void *buffer, off_t offset, size_t size)
    into cache, mark as dirty. */
 void cache_write(block_sector_t sector, void *buffer, off_t offset, size_t size)
 {
+    int cache_index = cache_search(sector);
 
+    lock_acquire(&buffer_cache_lock);
+    // not in cache
+    if (cache_index == -1){
+        // get a free index
+        cache_index = cache_evict();
+
+        // put sector into cache
+        lock_acquire(&buffer_cache[cache_index]->cache_lock);
+        buffer_cache[cache_index]->sector = sector;
+        buffer_cache[cache_index]->dirty = false;
+        block_read(fs_device, sector, buffer_cache[cache_index]->data);
+        lock_release(&buffer_cache[cache_index]->cache_lock);
+    }
+    
+    // memory write to cache
+    buffer_cache[cache_index]->accessed == true;
+    buffer_cache[cache_index]->dirty = true;
+    memcpy(buffer_cache[cache_index]->data + offset, buffer, size);
+    lock_release(&buffer_cache_lock);
 }
 
+/* Write back all changes to block, reset the cache to 
+   the initial state. */
 void cache_clear()
 {
     lock_acquire(&buffer_cache_lock);
     for (int i = 0; i < BUFFER_CACHE_SIZE; i++){
-        if (buffer_cache[i].dirty == true){
-            buffer_cache[i].dirty = false;
-            block_write(fs_device, buffer_cache[i].sector,buffer_cache[i].data);
+        if (buffer_cache[i]->dirty == true){
+            buffer_cache[i]->dirty = false;
+            block_write(fs_device, buffer_cache[i]->sector,buffer_cache[i]->data);
         }
-        // remove sector and data
-
-
+        buffer_cache[i]->accessed = false;
     }
     lock_release(&buffer_cache_lock);
 }
 
 /* Check if the required sector is in cache.
-   Problem: null == 0, it may confused between null and id 0. */
-block_sector_t cache_search(block_sector_t sector)
+   Return the index or -1 if not found. */
+int cache_search(block_sector_t sector)
 {
-    for (int i = 0; i < BUFFER_CACHE_SIZE; i++)
-    {
-        if (buffer_cache[i].sector == sector){
+    lock_acquire(&buffer_cache_lock);
+    for (int i = 0; i < BUFFER_CACHE_SIZE; i++){
+        if (buffer_cache[i]->sector == sector){
+            lock_release(&buffer_cache_lock);
             return i;
         }
     }
-    return NULL;
+    lock_release(&buffer_cache_lock);
+    return -1;
 }
 
-/* Evict one sector in cache by clock algorithm, the function is
-   called when the cache is full. After evict(), there should be
-   63 sectors in cache and the next index to use is the position
-   of the evicted one. */
-void buffer_cache_evict()
+/* Return an index where can put a new sector. When the cache is 
+   not full, it returns a spare index; when the cache is full, 
+   evict on sector by clock algorithm. There is no need to remove
+   the evicted sector since we can just rewrite it. 
+   This function is called when putting a new sector into cache. */
+int cache_evict()
 {
     lock_acquire(&buffer_cache_lock);
     int i = 0;
 
     // clock algorithm
     while(true){
-        if (buffer_cache[i].accessed){
-            buffer_cache[i].accessed = false;
+        if (buffer_cache[i]->accessed){
+            buffer_cache[i]->accessed = false;
         }else{
-            if (buffer_cache[i].dirty){
-                block_write(fs_device,buffer_cache[i].sector,buffer_cache[i].data);
+            if (buffer_cache[i]->dirty){
+                block_write(fs_device,buffer_cache[i]->sector,buffer_cache[i]->data);
             }
             break;
         }
         i++;
         i = i % BUFFER_CACHE_SIZE;
     }
-
-    // remove it
-
-    buffer_cache_suggested_index = i;
-    buffer_cache_put -= 1;
+    
     lock_release(&buffer_cache_lock);
+    
+    return i;
 }

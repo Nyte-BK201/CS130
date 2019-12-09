@@ -13,6 +13,7 @@ struct cache_entry
     uint8_t data[BLOCK_SECTOR_SIZE];   /* data of the sector */
     bool dirty;                        
     bool accessed;
+    struct lock cache_lock;
 };
 
 void cache_init();
@@ -20,5 +21,7 @@ void cache_read(block_sector_t, void *, off_t, size_t);
 void cache_write(block_sector_t, void *, off_t, size_t);
 void cache_clear();
 void cache_read_ahead();
+int cache_evict();
+int cache_search(block_sector_t);
 
 #endif /* filesys/cache.h */
