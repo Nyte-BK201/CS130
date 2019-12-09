@@ -1,8 +1,12 @@
 #include "filesys/cache.h"
+#include "devices/timer.h"
+#include "threads/thread.h"
 
 struct cache_entry* buffer_cache[BUFFER_CACHE_SIZE];
 
 struct lock buffer_cache_lock;
+
+static void cache_clear_periodic (void *aux UNUSED);
 
 /* Initial the buffer cache. The buffer cache is 32KB and can store
    64 sectors with each sector 512B. */
@@ -16,6 +20,7 @@ void cache_init()
         buffer_cache[i]->sector = -1;
         lock_init(&buffer_cache[i]->cache_lock);
     }
+    thread_create("write_behind", PRI_DEFAULT, cache_clear_periodic, NULL);
 }
 
 /* Read a whole sector from disk to memory. Search it in buffer
@@ -85,7 +90,7 @@ void cache_clear()
             buffer_cache[i]->dirty = false;
             block_write(fs_device, buffer_cache[i]->sector,buffer_cache[i]->data);
         }
-        buffer_cache[i]->accessed = false;
+        // buffer_cache[i]->accessed = false;
     }
     lock_release(&buffer_cache_lock);
 }
@@ -132,4 +137,12 @@ int cache_evict()
     lock_release(&buffer_cache_lock);
     
     return i;
+}
+
+void cache_clear_periodic (void *aux UNUSED)
+{
+	while (true){
+		timer_sleep(TIMER_FREQ);
+		cache_clear();
+	}
 }
