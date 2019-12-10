@@ -16,11 +16,16 @@ struct cache_entry
     struct lock cache_lock;
 };
 
+struct read_ahead_entry {
+    block_sector_t sector;
+    struct list_elem elem;
+};
+
 void cache_init();
 void cache_read(block_sector_t, void *, off_t, size_t);
 void cache_write(block_sector_t, void *, off_t, size_t);
 void cache_clear();
-void cache_read_ahead();
+void cache_read_ahead(block_sector_t);
 int cache_evict();
 int cache_search(block_sector_t);
 

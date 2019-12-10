@@ -3,16 +3,25 @@
 #include "threads/thread.h"
 
 struct cache_entry* buffer_cache[BUFFER_CACHE_SIZE];
-
 struct lock buffer_cache_lock;
 
-static void cache_clear_periodic (void *aux UNUSED);
+struct list read_ahead_list;
+struct lock read_ahead_lock;
+struct condition read_ahead_cond;
+
+static void cache_clear_periodic_background(void *aux UNUSED);
+static void cache_read_ahead_background(void *aux UNUSED);
 
 /* Initial the buffer cache. The buffer cache is 32KB and can store
    64 sectors with each sector 512B. */
 void cache_init()
 {
     lock_init(&buffer_cache_lock);
+    list_init(&read_ahead_list);
+    lock_init(&read_ahead_lock);
+    cond_init(&read_ahead_cond);
+
+    // init every cache entry
     for (int i = 0; i < BUFFER_CACHE_SIZE; i++){
         buffer_cache[i] = malloc(sizeof(struct cache_entry));
         buffer_cache[i]->accessed = false;
@@ -20,7 +29,9 @@ void cache_init()
         buffer_cache[i]->sector = -1;
         lock_init(&buffer_cache[i]->cache_lock);
     }
-    thread_create("write_behind", PRI_DEFAULT, cache_clear_periodic, NULL);
+
+    thread_create("write_behind", PRI_DEFAULT, cache_clear_periodic_background, NULL);
+    thread_create("read_ahead", PRI_DEFAULT, cache_read_ahead_background, NULL);
 }
 
 /* Read a whole sector from disk to memory. Search it in buffer
@@ -139,10 +150,52 @@ int cache_evict()
     return i;
 }
 
-void cache_clear_periodic (void *aux UNUSED)
+/* Write back all changes every second and reset to initial state.
+   This function runs in the background. TIMER_FREQ defines ticks
+   per second in timer.h. */
+static void cache_clear_periodic_background(void *aux UNUSED)
 {
 	while (true){
 		timer_sleep(TIMER_FREQ);
 		cache_clear();
 	}
 }
+
+/* Commit a request to read ahead the next sector. Push the sector
+   into read_ahead_list and signal the background thread to wake up
+   and read it. 
+   Attention: parameter passed in should be the next sector. */
+void cache_read_ahead(block_sector_t sector)
+{
+    lock_acquire(&read_ahead_lock);
+    struct read_ahead_entry *rae = malloc(sizeof(struct read_ahead_entry));
+    rae->sector = sector;
+    list_push_back(&read_ahead_list,&rae->elem);
+    cond_signal(&read_ahead_cond, &read_ahead_lock);
+    lock_release(&read_ahead_lock);
+}
+
+/* Handle the read_ahead requests in read_ahead_list in the background.
+   Wait for read_ahead_cond until there is request, then take it out and
+   read into cache. */
+static void cache_read_ahead_background(void *aux UNUSED)
+{
+    while(true){
+        lock_acquire(&read_ahead_lock);
+        
+        // wait the condition until the list is not empty
+        while(list_empty(&read_ahead_list)){
+            cond_wait(&read_ahead_cond,&read_ahead_lock);
+        }
+
+        // get the sector id
+        struct list_elem *e = list_pop_front(&read_ahead_list);
+        struct read_ahead_entry *rae = list_entry(e, struct read_ahead_entry, elem);
+        lock_release(&read_ahead_lock);
+
+        // read the sector into cache, buffer doesn't need here.
+        cache_read(rae->sector,NULL,0,BLOCK_SECTOR_SIZE);
+        free(rae);
+    }
+}
+
