@@ -24,7 +24,7 @@ filesys_init (bool format)
 
   inode_init ();
   free_map_init ();
-  cache_init();
+  cache_init ();
 
   if (format) 
     do_format ();
@@ -38,6 +38,7 @@ void
 filesys_done (void) 
 {
   free_map_close ();
+  cache_clear ();
 }
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
