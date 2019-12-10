@@ -128,7 +128,6 @@ int cache_search(block_sector_t sector)
    This function is called when putting a new sector into cache. */
 int cache_evict()
 {
-    lock_acquire(&buffer_cache_lock);
     int i = 0;
 
     // clock algorithm
@@ -144,8 +143,6 @@ int cache_evict()
         i++;
         i = i % BUFFER_CACHE_SIZE;
     }
-    
-    lock_release(&buffer_cache_lock);
     
     return i;
 }
