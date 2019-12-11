@@ -38,7 +38,7 @@ void cache_init()
    cache, if it is not in cache, read it from disk and put into
    cache, if cache is full then evict one sector. Finally read
    sector data into the given buffer. */
-void cache_read(block_sector_t sector, void *buffer, off_t offset, size_t size)
+void cache_read(block_sector_t sector, void *buffer, off_t offset, off_t size)
 {
     int cache_index = cache_search(sector);
 
@@ -47,6 +47,7 @@ void cache_read(block_sector_t sector, void *buffer, off_t offset, size_t size)
     if (cache_index == -1){
         // get a free index
         cache_index = cache_evict();
+        lock_release(&buffer_cache_lock);
 
         // put sector into cache
         lock_acquire(&buffer_cache[cache_index]->cache_lock);
@@ -54,19 +55,21 @@ void cache_read(block_sector_t sector, void *buffer, off_t offset, size_t size)
         buffer_cache[cache_index]->dirty = false;
         block_read(fs_device, sector, buffer_cache[cache_index]->data);
         lock_release(&buffer_cache[cache_index]->cache_lock);
+    }else{
+        lock_release(&buffer_cache_lock);
     }
     
     // memory read from cache
     buffer_cache[cache_index]->accessed == true;
     memcpy(buffer, buffer_cache[cache_index]->data + offset, size);
-    lock_release(&buffer_cache_lock);
+    // lock_release(&buffer_cache_lock);
 }
 
 /* Write buffer from memory to disk. Here just write into cache
    and write to disk by cache_clear(). Search it in buffer cache,
    if it is not in cache, put the sector into cache. Write buffer
    into cache, mark as dirty. */
-void cache_write(block_sector_t sector, void *buffer, off_t offset, size_t size)
+void cache_write(block_sector_t sector, void *buffer, off_t offset, off_t size)
 {
     int cache_index = cache_search(sector);
 
@@ -132,14 +135,19 @@ int cache_evict()
 
     // clock algorithm
     while(true){
+        lock_acquire(&buffer_cache[i]->cache_lock);
         if (buffer_cache[i]->accessed){
             buffer_cache[i]->accessed = false;
+            lock_release(&buffer_cache[i]->cache_lock);
         }else{
             if (buffer_cache[i]->dirty){
                 block_write(fs_device,buffer_cache[i]->sector,buffer_cache[i]->data);
             }
+            lock_release(&buffer_cache[i]->cache_lock);
+
             break;
         }
+
         i++;
         i = i % BUFFER_CACHE_SIZE;
     }
