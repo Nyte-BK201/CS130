@@ -11,14 +11,26 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
+#define LV0_INDEX 123
+#define LV1_INDEX 1
+#define LV2_INDEX 1
+
+/* LV0 contains 123*512 Bytes
+  LV1 contains 1*128*512 Bytes
+  LV2 contains 1*128*LV1 Bytes
+  */
+static uint32_t LV0_SIZE = (LV0_INDEX * BLOCK_SECTOR_SIZE);
+static uint32_t LV1_SIZE = ((BLOCK_SECTOR_SIZE / 4) * BLOCK_SECTOR_SIZE);
+static uint32_t LV2_SIZE = ((BLOCK_SECTOR_SIZE / 4) * (BLOCK_SECTOR_SIZE / 4) * BLOCK_SECTOR_SIZE); 
+
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    block_sector_t start;               /* First data sector. */
+    block_sector_t sectors[125];        /* Lv0 - lv2 files */
+    uint32_t isdir;                     /* 0 file, 1 dir */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -40,6 +52,11 @@ struct inode
     struct inode_disk data;             /* Inode content. */
   };
 
+static block_sector_t
+lv0_translate(const struct inode_disk *inode_disk, off_t pos){
+  return inode_disk->sectors[pos/BLOCK_SECTOR_SIZE];
+}
+
 /* Returns the block device sector that contains byte offset POS
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset
@@ -48,10 +65,28 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
-  if (pos < inode->data.length)
-    return inode->data.start + pos / BLOCK_SECTOR_SIZE;
-  else
-    return -1;
+  if(pos<LV0_SIZE)return lv0_translate(&inode->data,pos);
+  pos -= LV0_SIZE;
+
+  if(pos<LV1_SIZE){
+    struct inode_disk *inode_disk = malloc(sizeof(struct inode_disk));
+    cache_read(inode->data.sectors[LV0_INDEX],inode_disk,0,BLOCK_SECTOR_SIZE);
+    block_sector_t ans = lv0_translate(inode_disk,pos);
+    free(inode_disk);
+    return ans;
+  }
+  pos -= LV1_SIZE;
+  
+  if(pos<LV2_SIZE){
+    struct inode_disk *inode_disk = malloc(sizeof(struct inode_disk));
+    cache_read(inode->data.sectors[LV0_INDEX+LV1_INDEX],inode_disk,0,BLOCK_SECTOR_SIZE);
+    cache_read(inode_disk->sectors[pos/LV1_SIZE],inode_disk,0,BLOCK_SECTOR_SIZE);
+    pos-=(pos/LV1_SIZE)*LV1_SIZE;
+    block_sector_t ans = lv0_translate(inode_disk,pos);
+    free(inode_disk);
+    return ans;
+  }
+  return -1;
 }
 
 /* List of open inodes, so that opening a single inode twice
