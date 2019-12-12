@@ -27,7 +27,7 @@ static uint32_t LV2_SIZE = ((BLOCK_SECTOR_SIZE / 4) * (BLOCK_SECTOR_SIZE / 4) * 
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    block_sector_t sectors[125];        /* Lv0 - lv2 files */
+    block_sector_t sectors[125];        /* Lv0 0~122, lv1 123, lv2 124 */
     uint32_t isdir;                     /* 0 file, 1 dir */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
@@ -61,13 +61,18 @@ lv0_translate(const struct inode_disk *inode_disk, off_t pos){
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset
    POS. */
+// this function is wrong by Dec 12 10:50p.m
 static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
+  // longer than this file
+  if(pos>inode->data.length) return -1;
+
   if(pos<LV0_SIZE)return lv0_translate(&inode->data,pos);
   pos -= LV0_SIZE;
 
+  // level 1: read level 1 into memory and translate with lv0
   if(pos<LV1_SIZE){
     struct inode_disk *inode_disk = malloc(sizeof(struct inode_disk));
     cache_read(inode->data.sectors[LV0_INDEX],inode_disk,0,BLOCK_SECTOR_SIZE);
@@ -77,6 +82,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
   }
   pos -= LV1_SIZE;
   
+  // level 2: read level2 and relocate level 1 block then translate
   if(pos<LV2_SIZE){
     struct inode_disk *inode_disk = malloc(sizeof(struct inode_disk));
     cache_read(inode->data.sectors[LV0_INDEX+LV1_INDEX],inode_disk,0,BLOCK_SECTOR_SIZE);
@@ -100,13 +106,94 @@ inode_init (void)
   list_init (&open_inodes);
 }
 
+/*  allocate a sector in disk and fill with zeros to use
+  */
+static block_sector_t
+sector_allocate_disk(){
+  block_sector_t new_sec;
+  char *sec_fill = malloc(BLOCK_SECTOR_SIZE);
+  if(!free_map_allocate(1,&new_sec) || sec_fill==NULL) return -1;
+  memset(sec_fill,0,BLOCK_SECTOR_SIZE);
+
+  cache_write(new_sec,sec_fill,0,BLOCK_SECTOR_SIZE);
+  free(sec_fill);
+  return new_sec;
+}
+
+/* add new_sec to lv0
+  */
+static bool
+sector_allocate_lv0(struct inode_disk *inode_disk, block_sector_t new_sec, off_t pos){
+  // -1 for moving 512th byte to sector[0]
+  inode_disk->sectors[(pos-1)/BLOCK_SECTOR_SIZE] = new_sec;
+  return true;
+}
+
+/* add new_sec to lv1
+  */
+static bool
+sector_allocate_lv1(struct inode_disk *inode_disk, block_sector_t new_sec, off_t pos){
+  struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
+  cache_read(inode_disk->sectors[LV0_INDEX],lv1_sector,0,BLOCK_SECTOR_SIZE);
+  sector_allocate_lv0(lv1_sector,new_sec,pos);
+  cache_write(inode_disk->sectors[LV0_INDEX],lv1_sector,0,BLOCK_SECTOR_SIZE);
+  free (lv1_sector);
+  return true;
+}
+
+static bool
+sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
+
+}
+
+/* Allocate one more sector to head inode.
+  */
+static bool
+sector_allocate_one(struct inode_disk *head){
+  // allocate a new sector
+  block_sector_t new_sec = sector_allocate_disk();
+  if(new_sec == -1)return false;
+  
+  // add new sector to head inode
+  uint32_t new_length = head->length + BLOCK_SECTOR_SIZE;
+  // new sector fits in LV0
+  if(new_length < LV0_SIZE){
+    return sector_allocate_lv0(head,new_sec,new_length);
+  }
+  new_length -= LV0_SIZE;
+
+  if(new_length < LV1_SIZE){
+    return sector_allocate_lv1(head,new_sec,new_length);
+  }
+}
+
+/* Allocate more LENGTH bytes blocks and zero them 
+  */
+static bool
+sector_allocate(struct inode_disk *head, off_t length){
+  // see if required more length fits in the last sector
+  off_t block_end = ROUND_UP(head->length,BLOCK_SECTOR_SIZE);
+  if(block_end - head->length >= length){
+    head->length += length;
+    return true;
+  }else{
+    while(length>0){
+      if(!sector_allocate_one(head))return false;
+
+      head->length += length;
+      length -= BLOCK_SECTOR_SIZE;
+    }
+    return true;
+  }
+}
+
 /* Initializes an inode with LENGTH bytes of data and
    writes the new inode to sector SECTOR on the file system
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool isdir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -120,23 +207,10 @@ inode_create (block_sector_t sector, off_t length)
   disk_inode = calloc (1, sizeof *disk_inode);
   if (disk_inode != NULL)
     {
-      size_t sectors = bytes_to_sectors (length);
-      disk_inode->length = length;
+      disk_inode->length = 0;
       disk_inode->magic = INODE_MAGIC;
-      if (free_map_allocate (sectors, &disk_inode->start)) 
-        {
-          block_write (fs_device, sector, disk_inode);
-          if (sectors > 0) 
-            {
-              static char zeros[BLOCK_SECTOR_SIZE];
-              size_t i;
-              
-              for (i = 0; i < sectors; i++) 
-                block_write (fs_device, disk_inode->start + i, zeros);
-            }
-          success = true; 
-        } 
-      free (disk_inode);
+      disk_inode->isdir = isdir;
+      if(sector_allocate(disk_inode,length)) success=true;
     }
   return success;
 }
