@@ -221,6 +221,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
         break;
 
       cache_read(sector_idx, buffer + bytes_read, sector_ofs, chunk_size);
+      if (inode->data.length- offset > 512)
+        cache_read_ahead(byte_to_sector (inode, offset + 512));
       // if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
       //   {
       //     /* Read full sector directly into caller's buffer. */
