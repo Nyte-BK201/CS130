@@ -22,8 +22,8 @@ struct read_ahead_entry {
 };
 
 void cache_init();
-void cache_read(block_sector_t, void *, off_t, size_t);
-void cache_write(block_sector_t, void *, off_t, size_t);
+void cache_read(block_sector_t, void *, off_t, off_t);
+void cache_write(block_sector_t, void *, off_t, off_t);
 void cache_clear();
 void cache_read_ahead(block_sector_t);
 int cache_evict();
