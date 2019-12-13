@@ -319,6 +319,38 @@ inode_get_inumber (const struct inode *inode)
   return inode->sector;
 }
 
+/* deallocate sectors lv2-lv1-lv0
+  */
+static void
+sector_deallocate(struct inode *inode){
+  int len = inode->data.length -1;
+
+  block_sector_t sector;
+
+  // release all lv0 sectors
+  for(int i=0;i<len/BLOCK_SECTOR_SIZE;i++){
+    sector = byte_to_sector(inode,i*BLOCK_SECTOR_SIZE);
+    free_map_release(sector,1);
+  }
+  
+  // release lv1 sector if exsits
+  if(len >= LV0_SIZE) free_map_release(inode->data.sectors[LV0_INDEX],1);
+
+  // release lv1 sectors inside lv2 if exsits
+  if(len >= LV0_SIZE+LV1_SIZE){
+    struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
+    cache_read(inode->data.sectors[LV0_INDEX+LV1_INDEX],lv1_sector,0,BLOCK_SECTOR_SIZE);
+    for(int i=0;i<(len-LV0_SIZE-LV1_SIZE)/LV1_SIZE;i++)
+      free_map_release(lv1_sector->sectors[i],1);
+
+    free(lv1_sector);
+    free_map_release(inode->data.sectors[LV0_INDEX+LV1_INDEX],1);
+  }
+
+  // free head inode_disk
+  free_map_release(inode->sector,1);
+}
+
 /* Closes INODE and writes it to disk.
    If this was the last reference to INODE, frees its memory.
    If INODE was also a removed inode, frees its blocks. */
@@ -338,9 +370,7 @@ inode_close (struct inode *inode)
       /* Deallocate blocks if removed. */
       if (inode->removed) 
         {
-          free_map_release (inode->sector, 1);
-          free_map_release (inode->data.start,
-                            bytes_to_sectors (inode->data.length)); 
+          sector_deallocate(inode);
         }
 
       free (inode); 
@@ -410,7 +440,9 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
   // not sufficient sectors, allocate more
   if(inode_length(inode)<size+offset){
-    sector_allocate(&inode->data,size+offset-inode_length(inode));
+    if(!sector_allocate(&inode->data,size+offset-inode_length(inode))){
+      return 0;
+    }
     cache_write(inode->sector,&inode->data,0,BLOCK_SECTOR_SIZE);
   }
 
