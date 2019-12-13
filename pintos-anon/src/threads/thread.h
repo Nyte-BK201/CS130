@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/synch.h"
 #include "threads/malloc.h"
+#include "filesys/directory.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -115,8 +116,10 @@ struct thread
     struct wait_status *status_as_child;
 
     struct file *process_exec_file; /* this process's exec file */
-    
 
+/* =============================== project 4 ================================ */
+    struct dir *cwd;                    /* current directory */
+    
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

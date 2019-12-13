@@ -485,6 +485,14 @@ init_thread (struct thread *t, const char *name, int priority)
     t->file_use[i] = NULL;
   }
 
+  /* ============================ project 4 ============================= */
+  if (t == initial_thread){
+    t->cwd = dir_open_root();
+  }else{
+    /* inherit parent's current directory */
+    t->cwd = dir_reopen(thread_current()->cwd);
+  }
+
   old_level = intr_disable ();
   list_insert_ordered (&all_list, &t->allelem, 
                         thread_priority_large_func, NULL);
