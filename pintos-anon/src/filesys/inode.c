@@ -129,21 +129,60 @@ sector_allocate_lv0(struct inode_disk *inode_disk, block_sector_t new_sec, off_t
   return true;
 }
 
-/* add new_sec to lv1
+/* add new_sec to head's lv1
   */
 static bool
-sector_allocate_lv1(struct inode_disk *inode_disk, block_sector_t new_sec, off_t pos){
+sector_allocate_lv1(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
-  cache_read(inode_disk->sectors[LV0_INDEX],lv1_sector,0,BLOCK_SECTOR_SIZE);
+  // check if lv1 sector is allocated, if not allocate one
+  if(head->length < LV0_SIZE){
+    block_sector_t lv1 = sector_allocate_disk();
+    head->sectors[LV0_INDEX] = lv1;
+    cache_read(lv1,lv1_sector,0,BLOCK_SECTOR_SIZE);
+  }else{
+    cache_read(head->sectors[LV0_INDEX],lv1_sector,0,BLOCK_SECTOR_SIZE);
+  }
+  // add new_sec to proper place
   sector_allocate_lv0(lv1_sector,new_sec,pos);
-  cache_write(inode_disk->sectors[LV0_INDEX],lv1_sector,0,BLOCK_SECTOR_SIZE);
+  cache_write(head->sectors[LV0_INDEX],lv1_sector,0,BLOCK_SECTOR_SIZE);
   free (lv1_sector);
   return true;
 }
 
+/* add a new sector to head's lv2
+  */
 static bool
 sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
+  struct inode_disk *lv2_sector = malloc(sizeof(struct inode_disk));
+  /* lv1 sector have been allocated, check if lv2 sector is allocated
+    If not, allocate a sector */
+  if(head->length < LV0_SIZE+LV1_SIZE){
+    block_sector_t lv2 = sector_allocate_disk();
+    head->sectors[LV0_INDEX+LV1_INDEX] = lv2;
+    cache_read(lv2,lv2_sector,0,BLOCK_SECTOR_SIZE);
+  }else{
+    cache_read(head->sectors[LV0_INDEX+LV1_INDEX],lv2_sector,0,BLOCK_SECTOR_SIZE);
+  }
 
+  struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
+  // check if desired lv1 sector of lv2 is allocated */
+  off_t ori_sec_num = (head->length-LV0_SIZE-LV1_SIZE-1)/LV1_SIZE;
+  off_t new_sec_num = (pos-1)/LV1_SIZE;
+  if(ori_sec_num < new_sec_num){
+    block_sector_t lv1 = sector_allocate_disk();
+    lv2_sector->sectors[new_sec_num] = lv1;
+    cache_write(head->sectors[LV0_INDEX+LV1_INDEX],lv2_sector,0,BLOCK_SECTOR_SIZE);
+    cache_read(lv1,lv1_sector,0,BLOCK_SECTOR_SIZE);
+  }else{
+    cache_read(lv2_sector->sectors[new_sec_num],lv1_sector,0,BLOCK_SECTOR_SIZE);
+  }
+
+  // add new_sec to proper place
+  sector_allocate_lv0(lv1_sector,new_sec,pos);
+  cache_write(lv2_sector->sectors[new_sec_num],lv1_sector,0,BLOCK_SECTOR_SIZE);
+  free(lv2_sector);
+  free(lv1_sector);
+  return true;
 }
 
 /* Allocate one more sector to head inode.
@@ -165,6 +204,14 @@ sector_allocate_one(struct inode_disk *head){
   if(new_length < LV1_SIZE){
     return sector_allocate_lv1(head,new_sec,new_length);
   }
+  new_length -= LV1_SIZE;
+
+  if(new_length < LV2_SIZE){
+    return sector_allocate_lv2(head,new_sec,new_length);
+  }
+
+  // failed(exceed maximum allocation range)
+  return false;
 }
 
 /* Allocate more LENGTH bytes blocks and zero them 
@@ -177,6 +224,7 @@ sector_allocate(struct inode_disk *head, off_t length){
     head->length += length;
     return true;
   }else{
+    // not fit, allocate new sectors
     while(length>0){
       if(!sector_allocate_one(head))return false;
 
