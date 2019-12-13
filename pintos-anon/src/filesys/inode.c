@@ -232,7 +232,7 @@ sector_allocate(struct inode_disk *head, off_t length){
     while(length>0){
       if(!sector_allocate_one(head))return false;
 
-      head->length += length;
+      head->length += BLOCK_SECTOR_SIZE;
       length -= BLOCK_SECTOR_SIZE;
     }
     return true;
@@ -264,6 +264,8 @@ inode_create (block_sector_t sector, off_t length, bool isdir)
       disk_inode->isdir = isdir;
       if(sector_allocate(disk_inode,length)) success=true;
     }
+
+  if(success) cache_write(sector,disk_inode,0,BLOCK_SECTOR_SIZE);
   return success;
 }
 
