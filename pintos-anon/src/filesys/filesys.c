@@ -7,6 +7,7 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "filesys/cache.h"
+#include "threads/thread.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -103,4 +104,58 @@ do_format (void)
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
+}
+
+/* Parse a path, e.g. "/a/b/c" into dir and file. DIR_NAME points to "/a/b",
+   FILE_NAME points to "c". FILE_NAME maybe "." or ".." which should be
+   handled when using. Return false if any invalid path is given. */
+bool path_parse(const char *name, struct dir **dir_name, char **file_name)
+{
+  int length = strlen(name);
+  char *path = (char *) malloc (length + 1);
+  memcpy(path, name, length + 1);
+
+  struct dir *dir;
+  if (*path == '/'){
+    // absolute path
+    dir = dir_open_root();
+  }else{
+    // relative path
+    dir = dir_reopen(thread_current()->cwd);
+  }
+
+  char *token = NULL;
+  char *save_ptr = NULL;
+  char *last_token = NULL;
+
+  // get the last token, maybe "." ".." or filename
+  for(token = strtok_r(path, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)){
+    last_token = token;
+  }
+
+  // get dir without last token
+  token = NULL;
+  save_ptr = NULL;
+  for(token = strtok_r(path, "/", &save_ptr); token != NULL && token != last_token; token = strtok_r(NULL, "/", &save_ptr)) {
+    struct inode *inode;
+
+    //lookup the subdirectory and return false if it doesn't exist
+    if (!dir_lookup(dir, token, &inode)) {
+      dir_close(dir);
+      free(dir);
+      return false;
+    }
+
+    // go into subdirectory
+    dir_close(dir);
+    dir = dir_open(inode);
+  }
+  *dir_name = dir;
+
+  int file_name_length = strlen(last_token);
+  *file_name = malloc(file_name_length + 1);
+  memcpy(*file_name, last_token, file_name_length + 1);
+
+  free(path);
+  return true;
 }
