@@ -19,9 +19,9 @@
   LV1 contains 1*128*512 Bytes
   LV2 contains 1*128*LV1 Bytes
   */
-static uint32_t LV0_SIZE = (LV0_INDEX * BLOCK_SECTOR_SIZE);
-static uint32_t LV1_SIZE = ((BLOCK_SECTOR_SIZE / 4) * BLOCK_SECTOR_SIZE);
-static uint32_t LV2_SIZE = ((BLOCK_SECTOR_SIZE / 4) * (BLOCK_SECTOR_SIZE / 4) * BLOCK_SECTOR_SIZE); 
+static int32_t LV0_SIZE = (LV0_INDEX * BLOCK_SECTOR_SIZE);
+static int32_t LV1_SIZE = ((BLOCK_SECTOR_SIZE / 4) * BLOCK_SECTOR_SIZE);
+static int32_t LV2_SIZE = ((BLOCK_SECTOR_SIZE / 4) * (BLOCK_SECTOR_SIZE / 4) * BLOCK_SECTOR_SIZE); 
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
@@ -70,7 +70,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
   if(pos>inode->data.length) return -1;
 
   // minus 1 to move 512th byte to sector 0
-  pos -= 1;
+  // pos -= 1;
   if(pos<LV0_SIZE)return lv0_translate(&inode->data,pos);
   pos -= LV0_SIZE;
 
@@ -301,7 +301,7 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  block_read (fs_device, inode->sector, &inode->data);
+  cache_read (sector, &inode->data, 0,BLOCK_SECTOR_SIZE);
   return inode;
 }
 
