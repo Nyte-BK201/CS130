@@ -232,8 +232,14 @@ sector_allocate(struct inode_disk *head, off_t length){
     while(length>0){
       if(!sector_allocate_one(head))return false;
 
-      head->length += BLOCK_SECTOR_SIZE;
-      length -= BLOCK_SECTOR_SIZE;
+      if(length > BLOCK_SECTOR_SIZE){
+        head->length += BLOCK_SECTOR_SIZE;
+        length -= BLOCK_SECTOR_SIZE;
+      }else{
+        head->length += length;
+        length = 0;
+      }
+      
     }
     return true;
   }
