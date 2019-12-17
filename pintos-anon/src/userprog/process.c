@@ -260,6 +260,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  printf ("%s: exit(%d)\n", cur->name, cur->ret);
 
   /* A: check child_list as a parent role */
   /* free nodes in child_list if node's child already terminated */
@@ -333,8 +334,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
 
-      /* A process with pagedir must be a user process */
-      printf ("%s: exit(%d)\n", cur->name, cur->ret);
     }
 }
 

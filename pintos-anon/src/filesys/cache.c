@@ -47,22 +47,19 @@ void cache_read(block_sector_t sector, void *buffer, off_t offset, off_t size)
     if (cache_index == -1){
         // get a free index
         cache_index = cache_evict();
-        lock_release(&buffer_cache_lock);
 
         // put sector into cache
-        lock_acquire(&buffer_cache[cache_index]->cache_lock);
+        // lock_acquire(&buffer_cache[cache_index]->cache_lock);
         buffer_cache[cache_index]->sector = sector;
         //buffer_cache[cache_index]->dirty = false;
         block_read(fs_device, sector, buffer_cache[cache_index]->data);
-        lock_release(&buffer_cache[cache_index]->cache_lock);
-    }else{
-        lock_release(&buffer_cache_lock);
+        // lock_release(&buffer_cache[cache_index]->cache_lock);
     }
     // memory read from cache
     buffer_cache[cache_index]->accessed = true;
     if (buffer != NULL)
         memcpy(buffer, buffer_cache[cache_index]->data + offset, size);
-    // lock_release(&buffer_cache_lock);
+    lock_release(&buffer_cache_lock);
 }
 
 /* Write buffer from memory to disk. Here just write into cache
@@ -77,7 +74,6 @@ void cache_write(block_sector_t sector, void *buffer, off_t offset, off_t size)
     if (cache_index == -1){
         // get a free index
         cache_index = cache_evict();
-        lock_release(&buffer_cache_lock);
 
         // put sector into cache
         // lock_acquire(&buffer_cache[cache_index]->cache_lock);
@@ -86,15 +82,13 @@ void cache_write(block_sector_t sector, void *buffer, off_t offset, off_t size)
         timer_sleep(1);
         block_read(fs_device, sector, buffer_cache[cache_index]->data);
         // lock_release(&buffer_cache[cache_index]->cache_lock);
-    }else{
-        lock_release(&buffer_cache_lock);
     }
     // memory write to cache
     buffer_cache[cache_index]->accessed = true;
 
     buffer_cache[cache_index]->dirty = true;
     memcpy(buffer_cache[cache_index]->data + offset, buffer, size);
-    // lock_release(&buffer_cache_lock);
+    lock_release(&buffer_cache_lock);
 }
 
 /* Write back all changes to block, reset the cache to 
