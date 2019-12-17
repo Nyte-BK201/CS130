@@ -14,7 +14,8 @@ static void cache_read_ahead_background(void *aux UNUSED);
 
 /* Initial the buffer cache. The buffer cache is 32KB and can store
    64 sectors with each sector 512B. */
-void cache_init()
+void
+cache_init()
 {
     lock_init(&buffer_cache_lock);
     list_init(&read_ahead_list);
@@ -38,7 +39,8 @@ void cache_init()
    cache, if it is not in cache, read it from disk and put into
    cache, if cache is full then evict one sector. Finally read
    sector data into the given buffer. */
-void cache_read(block_sector_t sector, void *buffer, off_t offset, off_t size)
+void
+cache_read(block_sector_t sector, void *buffer, off_t offset, off_t size)
 {
     int cache_index = cache_search(sector);
 
@@ -66,7 +68,8 @@ void cache_read(block_sector_t sector, void *buffer, off_t offset, off_t size)
    and write to disk by cache_clear(). Search it in buffer cache,
    if it is not in cache, put the sector into cache. Write buffer
    into cache, mark as dirty. */
-void cache_write(block_sector_t sector, void *buffer, off_t offset, off_t size)
+void
+cache_write(block_sector_t sector, void *buffer, off_t offset, off_t size)
 {
     int cache_index = cache_search(sector);
     lock_acquire(&buffer_cache_lock);
@@ -93,7 +96,8 @@ void cache_write(block_sector_t sector, void *buffer, off_t offset, off_t size)
 
 /* Write back all changes to block, reset the cache to 
    the initial state. */
-void cache_clear()
+void
+cache_clear()
 {
     lock_acquire(&buffer_cache_lock);
     for (int i = 0; i < BUFFER_CACHE_SIZE; i++){
@@ -108,7 +112,8 @@ void cache_clear()
 
 /* Check if the required sector is in cache.
    Return the index or -1 if not found. */
-int cache_search(block_sector_t sector)
+int
+cache_search(block_sector_t sector)
 {
     lock_acquire(&buffer_cache_lock);
     for (int i = 0; i < BUFFER_CACHE_SIZE; i++){
@@ -126,7 +131,8 @@ int cache_search(block_sector_t sector)
    evict on sector by clock algorithm. There is no need to remove
    the evicted sector since we can just rewrite it. 
    This function is called when putting a new sector into cache. */
-int cache_evict()
+int
+cache_evict()
 {
     int i = 0;
 
@@ -160,7 +166,8 @@ int cache_evict()
 /* Write back all changes every second and reset to initial state.
    This function runs in the background. TIMER_FREQ defines ticks
    per second in timer.h. */
-static void cache_clear_periodic_background(void *aux UNUSED)
+static void
+cache_clear_periodic_background(void *aux UNUSED)
 {
 	while (true){
 		timer_sleep(TIMER_FREQ);
@@ -172,7 +179,8 @@ static void cache_clear_periodic_background(void *aux UNUSED)
    into read_ahead_list and signal the background thread to wake up
    and read it. 
    Attention: parameter passed in should be the next sector. */
-void cache_read_ahead(block_sector_t sector)
+void
+cache_read_ahead(block_sector_t sector)
 {
     lock_acquire(&read_ahead_lock);
     struct read_ahead_entry *rae = malloc(sizeof(struct read_ahead_entry));
@@ -185,7 +193,8 @@ void cache_read_ahead(block_sector_t sector)
 /* Handle the read_ahead requests in read_ahead_list in the background.
    Wait for read_ahead_cond until there is request, then take it out and
    read into cache. */
-static void cache_read_ahead_background(void *aux UNUSED)
+static void
+cache_read_ahead_background(void *aux UNUSED)
 {
     while(true){
         lock_acquire(&read_ahead_lock);

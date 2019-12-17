@@ -109,7 +109,8 @@ do_format (void)
 /* Parse a path, e.g. "/a/b/c" into dir and file. DIR_NAME points to "/a/b",
    FILE_NAME points to "c". FILE_NAME maybe "." or ".." which should be
    handled when using. Return false if any invalid path is given. */
-bool path_parse(const char *name, struct dir **dir_name, char **file_name)
+static bool
+path_parse(const char *name, struct dir **dir_name, char **file_name)
 {
   int length = strlen(name);
   char *path = (char *) malloc (length + 1);
