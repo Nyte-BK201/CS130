@@ -50,15 +50,18 @@ bool
 filesys_create (const char *name, off_t initial_size) 
 {
   block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
+  struct dir *dir = NULL;
+  char *file_name = NULL;
+  if(!path_parse(name,&dir,&file_name)) return false;
+
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, false)
-                  && dir_add (dir, name, inode_sector));
+                  && dir_add (dir, file_name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
   dir_close (dir);
-
+  free(file_name);
   return success;
 }
 
@@ -70,13 +73,15 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
-  struct dir *dir = dir_open_root ();
+  struct dir *dir = NULL;
+  char *file_name = NULL;
+  if(!path_parse(name,&dir,&file_name)) return false;
   struct inode *inode = NULL;
 
   if (dir != NULL)
-    dir_lookup (dir, name, &inode);
+    dir_lookup (dir, file_name, &inode);
   dir_close (dir);
-
+  free(file_name);
   return file_open (inode);
 }
 
@@ -87,10 +92,13 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir); 
+  struct dir *dir = NULL;
+  char *file_name = NULL;
+  if(!path_parse(name,&dir,&file_name)) return false;
 
+  bool success = dir != NULL && dir_remove (dir, file_name);
+  dir_close (dir); 
+  free(file_name);
   return success;
 }
 
@@ -112,12 +120,11 @@ do_format (void)
 static bool
 path_parse(const char *name, struct dir **dir_name, char **file_name)
 {
-  int length = strlen(name);
-  char *path = (char *) malloc (length + 1);
-  memcpy(path, name, length + 1);
+  char path[strlen(name) + 1];
+  memcpy(path, name, strlen(name) + 1);
 
-  struct dir *dir;
-  if (*path == '/'){
+  struct dir *dir = NULL;
+  if (path[0] == '/'){
     // absolute path
     dir = dir_open_root();
   }else{
@@ -138,7 +145,7 @@ path_parse(const char *name, struct dir **dir_name, char **file_name)
   token = NULL;
   save_ptr = NULL;
   for(token = strtok_r(path, "/", &save_ptr); token != NULL && token != last_token; token = strtok_r(NULL, "/", &save_ptr)) {
-    struct inode *inode;
+    struct inode *inode = NULL;
 
     //lookup the subdirectory and return false if it doesn't exist
     if (!dir_lookup(dir, token, &inode)) {
@@ -157,6 +164,5 @@ path_parse(const char *name, struct dir **dir_name, char **file_name)
   *file_name = malloc(file_name_length + 1);
   memcpy(*file_name, last_token, file_name_length + 1);
 
-  free(path);
   return true;
 }
