@@ -234,3 +234,31 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
+
+/* Parse a dir name, return true if there is such a dir, and return its pointer
+  Return false if cannot find.
+  */
+static bool
+dir_path_parse(const char *name, struct inode **dir_inode){
+  struct dir *prev_dir = NULL;
+  char *this_dir_name = NULL;
+  struct inode *inode = NULL;
+
+  if(filesys_path_parse(name,&prev_dir,&this_dir_name)){
+    if(dir_lookup(prev_dir,this_dir_name,&inode)){
+      dir_close(prev_dir);
+      free(this_dir_name);
+      *dir_inode = inode;
+      return true;
+
+    }else{
+      dir_close(prev_dir);
+      free(this_dir_name);
+      *dir_inode = NULL;
+      return false;
+    }
+
+  }
+
+  return false;
+}

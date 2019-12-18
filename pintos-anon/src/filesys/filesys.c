@@ -118,7 +118,7 @@ do_format (void)
    FILE_NAME points to "c". FILE_NAME maybe "." or ".." which should be
    handled when using. Return false if any invalid path is given. */
 static bool
-path_parse(const char *name, struct dir **dir_name, char **file_name)
+filesys_path_parse(const char *name, struct dir **dir_name, char **file_name)
 {
   char path[strlen(name) + 1];
   memcpy(path, name, strlen(name) + 1);
@@ -137,27 +137,33 @@ path_parse(const char *name, struct dir **dir_name, char **file_name)
   char *last_token = NULL;
 
   // get the last token, maybe "." ".." or filename
-  for(token = strtok_r(path, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr)){
-    last_token = token;
-  }
+  for(token = strtok_r(path, "/", &save_ptr);
+      token != NULL;
+      token = strtok_r(NULL, "/", &save_ptr)){
+        last_token = token;  
+      }
 
   // get dir without last token
   token = NULL;
   save_ptr = NULL;
-  for(token = strtok_r(path, "/", &save_ptr); token != NULL && token != last_token; token = strtok_r(NULL, "/", &save_ptr)) {
-    struct inode *inode = NULL;
+  for(token = strtok_r(path, "/", &save_ptr);
+      token != NULL && token != last_token;
+      token = strtok_r(NULL, "/", &save_ptr)){
+        
+        struct inode *inode = NULL;
 
-    //lookup the subdirectory and return false if it doesn't exist
-    if (!dir_lookup(dir, token, &inode)) {
-      dir_close(dir);
-      free(dir);
-      return false;
-    }
+        //lookup the subdirectory and return false if it doesn't exist
+        if (!dir_lookup(dir, token, &inode)) {
+          dir_close(dir);
+          free(dir);
+          return false;
+        }
 
-    // go into subdirectory
-    dir_close(dir);
-    dir = dir_open(inode);
-  }
+        // go into subdirectory
+        dir_close(dir);
+        dir = dir_open(inode);
+      }
+
   *dir_name = dir;
 
   int file_name_length = strlen(last_token);

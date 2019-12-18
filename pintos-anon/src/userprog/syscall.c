@@ -8,6 +8,7 @@
 #include "userprog/process.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 #include "threads/vaddr.h"
 #include "lib/stdio.h"
 #include "lib/kernel/console.h"
@@ -31,6 +32,12 @@ static int _write_ (int fd, const void *buffer, unsigned size);
 static void _seek_ (int fd, unsigned position);
 static unsigned _tell_ (int fd);
 static void _close_ (int fd);
+/* ============================ project 4 ============================= */
+static bool _chdir_ (const char *dir);
+static bool _mkdir_ (const char *dir);
+static bool _readdir_ (int fd, char *name);
+static bool _isdir_ (int fd);
+static int _inumber_ (int fd);
 
 /* return true if a pointer is valid */
 bool check_ptr(char *ptr){
@@ -125,8 +132,23 @@ syscall_handler (struct intr_frame *f UNUSED)
   }else if(call==SYS_CLOSE){
     check_ptr_length(sp+1,4);
     _close_(*(sp + 1));
+  }else if(call==SYS_CHDIR){
+    check_ptr_length(sp+1,4);
+    f->eax = _chdir_(*(sp+1));
+  }else if(call==SYS_MKDIR){
+    check_ptr_length(sp+1,4);
+    f->eax = _mkdir_(*(sp+1));
+  }else if(call==SYS_READDIR){
+    check_ptr_length(sp+1,4);
+    check_ptr_length(sp+2,4);
+    f->eax = _readdir_(*(sp+1),*(sp+2));
+  }else if(call==SYS_ISDIR){
+    check_ptr_length(sp+1,4);
+    f->eax = _isdir_(*(sp+1));
+  }else if(call==SYS_INUMBER){
+    check_ptr_length(sp+1,4);
+    f->eax = _inumber_(*(sp+1));
   }
-  
 }
 
 
@@ -296,4 +318,47 @@ _close_ (int fd){
   /* Close the file and remove from the thread */
   file_close(curfile);
   cur->file_use[fd] = NULL;
+}
+
+/* ============================ project 4 ============================= */
+static bool
+_chdir_ (const char *dir){
+  check_ptr_char(dir);
+  
+  struct inode *dir_inode = NULL;
+  if(dir_path_parse(dir,&dir_inode)){
+    dir_close(thread_current()->cwd);
+    thread_current()->cwd =  dir_open(dir_inode);
+    return true;
+  }
+
+  return false;
+}
+
+static bool
+_mkdir_ (const char *dir){
+  check_ptr_char(dir);
+
+  struct inode *dir_inode = NULL;
+  if(dir_path_parse(dir,&dir_inode)){
+    inode_close(dir_inode);
+    return false;
+  }
+
+  
+}
+
+static bool
+_readdir_ (int fd, char *name){
+  check_ptr_char(name);
+}
+
+static bool
+_isdir_ (int fd){
+
+}
+
+static int
+_inumber_ (int fd){
+
 }
