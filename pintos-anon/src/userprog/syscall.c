@@ -362,14 +362,56 @@ _mkdir_ (const char *dir){
 static bool
 _readdir_ (int fd, char *name){
   check_ptr_char(name);
+  char ret_name[READDIR_MAX_LEN+1];
+
+  if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
+  if(fd < 0 || fd > 129) _exit_(-1);
+
+  struct thread *cur = thread_current();
+
+  /* Get the target file */
+  struct file *curfile = cur->file_use[fd];
+  if(curfile == NULL) _exit_(-1);
+
+  // fd is not a dir
+  struct dir* dir = dir_open(file_get_inode(curfile));
+  if(dir == NULL) return false;
+
+  // we already read all entries in dir
+  if(!dir_readdir(dir,ret_name)){
+    dir_close(dir);
+    return false;
+  }
+
+  dir_close(dir);
+  memcpy(name,ret_name,strlen(ret_name)+1);
+  return true;
 }
 
 static bool
 _isdir_ (int fd){
+  if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
+  if(fd < 0 || fd > 129) _exit_(-1);
 
+  struct thread *cur = thread_current();
+
+  /* Get the target file */
+  struct file *curfile = cur->file_use[fd];
+  if(curfile == NULL) _exit_(-1);
+
+  return inode_is_dir(file_get_inode(curfile));
 }
 
 static int
 _inumber_ (int fd){
+  if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
+  if(fd < 0 || fd > 129) _exit_(-1);
 
+  struct thread *cur = thread_current();
+
+  /* Get the target file */
+  struct file *curfile = cur->file_use[fd];
+  if(curfile == NULL) _exit_(-1);
+
+  return inode_get_inumber(file_get_inode(curfile));
 }
