@@ -52,7 +52,7 @@ filesys_create (const char *name, off_t initial_size)
   block_sector_t inode_sector = 0;
   struct dir *dir = NULL;
   char *file_name = NULL;
-  if(!path_parse(name,&dir,&file_name)) return false;
+  if(!filesys_path_parse(name,&dir,&file_name)) return false;
 
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
@@ -75,7 +75,7 @@ filesys_open (const char *name)
 {
   struct dir *dir = NULL;
   char *file_name = NULL;
-  if(!path_parse(name,&dir,&file_name)) return false;
+  if(!filesys_path_parse(name,&dir,&file_name)) return false;
   struct inode *inode = NULL;
 
   if (dir != NULL)
@@ -94,7 +94,11 @@ filesys_remove (const char *name)
 {
   struct dir *dir = NULL;
   char *file_name = NULL;
-  if(!path_parse(name,&dir,&file_name)) return false;
+
+  // we cannot allow root to be removed
+  if(!strcmp(name,'/')) return false;
+
+  if(!filesys_path_parse(name,&dir,&file_name)) return false;
 
   bool success = dir != NULL && dir_remove (dir, file_name);
   dir_close (dir); 
@@ -108,7 +112,7 @@ do_format (void)
 {
   printf ("Formatting file system...");
   free_map_create ();
-  if (!dir_create (ROOT_DIR_SECTOR, 16))
+  if (!dir_create (ROOT_DIR_SECTOR, ROOT_DIR_SECTOR))
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
@@ -124,13 +128,16 @@ filesys_path_parse(const char *name, struct dir **dir_name, char **file_name)
   memcpy(path, name, strlen(name) + 1);
 
   struct dir *dir = NULL;
-  if (path[0] == '/'){
+  if (path[0]=='/'){
     // absolute path
     dir = dir_open_root();
   }else{
     // relative path
     dir = dir_reopen(thread_current()->cwd);
   }
+
+  // fail when dir open failed
+  if(dir == NULL) return false;
 
   char *token = NULL;
   char *save_ptr = NULL;
@@ -155,7 +162,6 @@ filesys_path_parse(const char *name, struct dir **dir_name, char **file_name)
         //lookup the subdirectory and return false if it doesn't exist
         if (!dir_lookup(dir, token, &inode)) {
           dir_close(dir);
-          free(dir);
           return false;
         }
 

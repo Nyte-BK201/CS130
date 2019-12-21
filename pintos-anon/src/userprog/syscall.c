@@ -9,6 +9,7 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
+#include "filesys/free-map.h"
 #include "threads/vaddr.h"
 #include "lib/stdio.h"
 #include "lib/kernel/console.h"
@@ -325,27 +326,37 @@ static bool
 _chdir_ (const char *dir){
   check_ptr_char(dir);
   
-  struct inode *dir_inode = NULL;
-  if(dir_path_parse(dir,&dir_inode)){
-    dir_close(thread_current()->cwd);
-    thread_current()->cwd =  dir_open(dir_inode);
-    return true;
-  }
+  struct dir *new_dir = dir_open(dir_path_parse(dir,NULL));
+  if(new_dir == NULL) return false;
 
-  return false;
+  dir_close(thread_current()->cwd);
+  thread_current()->cwd = new_dir;
+  return true;
 }
 
 static bool
 _mkdir_ (const char *dir){
   check_ptr_char(dir);
+  block_sector_t sector = 0;
+  struct dir *prev_dir = NULL;
 
-  struct inode *dir_inode = NULL;
-  if(dir_path_parse(dir,&dir_inode)){
-    inode_close(dir_inode);
+  /* already having a dir with this name */
+  struct inode *inode = dir_path_parse(dir,&prev_dir);
+  if(inode != NULL || prev_dir == NULL){
+    inode_close(inode);
+    if(prev_dir != NULL) dir_close(prev_dir);
     return false;
   }
 
-  
+  if(!free_map_allocate(1,&sector)) return false;
+
+  // create dir
+  if( dir_create(sector,inode_get_inumber(dir_get_inode(prev_dir))) ){
+    dir_close(prev_dir);
+    return true;
+  }
+
+  return false;
 }
 
 static bool

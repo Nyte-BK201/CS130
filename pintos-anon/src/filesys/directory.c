@@ -24,9 +24,26 @@ struct dir_entry
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
-dir_create (block_sector_t sector, size_t entry_cnt)
+dir_create (block_sector_t sector, block_sector_t parent_sector)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), true);
+  if(!inode_create (sector, 0, true))
+    return false;
+
+  /* open new created dir */
+  struct inode* inode = inode_open(sector);
+  struct dir* dir = dir_open(inode);
+  if(dir == NULL)return false;
+
+  // write to parent inode
+  if(dir_add(dir,".",sector) && dir_add(dir,"..",parent_sector))
+    return true;
+  else{
+    /* if write fails, remove it in case the following cmd tries to open this
+    inode's '.' or '..' which will crash the system */
+    inode_remove(inode);
+    dir_close(dir);
+    return false;
+  }
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -192,6 +209,9 @@ dir_remove (struct dir *dir, const char *name)
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+  // we can not allow '.' or '..' to be removed
+  if(!strcmp(name, ".") || !strcmp(name, "..")) return false;
+
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs))
     goto done;
@@ -235,30 +255,25 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
-/* Parse a dir name, return true if there is such a dir, and return its pointer
-  Return false if cannot find.
+/* Parse a dir name, return its inode pointer if there is such a dir,
+  Return NULL if cannot find.
   */
-static bool
-dir_path_parse(const char *name, struct inode **dir_inode){
+static struct inode*
+dir_path_parse(const char *name, struct dir **ret_dir){
   struct dir *prev_dir = NULL;
-  char *this_dir_name = NULL;
+  char *last_dir_name = NULL;
   struct inode *inode = NULL;
 
-  if(filesys_path_parse(name,&prev_dir,&this_dir_name)){
-    if(dir_lookup(prev_dir,this_dir_name,&inode)){
-      dir_close(prev_dir);
-      free(this_dir_name);
-      *dir_inode = inode;
-      return true;
+  if(filesys_path_parse(name,&prev_dir,&last_dir_name)){
+    dir_lookup(prev_dir,last_dir_name,&inode);
+    // if we can not find this name, it returns a NULL pointer
+    // input ret_dir NULL means we do not need to keep prev_dir
+    if(ret_dir == NULL) dir_close(prev_dir);
+    else *ret_dir = prev_dir;
 
-    }else{
-      dir_close(prev_dir);
-      free(this_dir_name);
-      *dir_inode = NULL;
-      return false;
-    }
-
+    free(last_dir_name);
+    return inode;
   }
 
-  return false;
+  return NULL;
 }
