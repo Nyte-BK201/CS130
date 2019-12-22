@@ -555,5 +555,24 @@ inode_length (const struct inode *inode)
 /* return isdir */
 bool
 inode_is_dir (const struct inode *inode){
-  return inode->isdir;
+  if(inode == NULL) return false;
+  return inode->data.isdir;
+}
+
+void
+inode_lock (const struct inode *inode){
+  if(inode == NULL) return;
+  lock_acquire(&inode->lock);
+}
+
+void
+inode_unlock (const struct inode *inode){
+  if(inode == NULL) return;
+  lock_release(&inode->lock);
+}
+
+int
+inode_open_cnt (const struct inode *inode){
+  if(inode == NULL) return -1;
+  return inode->open_cnt;
 }

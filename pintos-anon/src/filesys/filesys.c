@@ -95,7 +95,7 @@ filesys_remove (const char *name)
   struct dir *dir = NULL;
   char *file_name = NULL;
 
-  // we cannot allow root to be removed
+  // exclude root
   if(!strcmp(name,'/')) return false;
 
   if(!filesys_path_parse(name,&dir,&file_name)) return false;

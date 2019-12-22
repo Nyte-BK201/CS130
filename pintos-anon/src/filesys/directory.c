@@ -141,7 +141,11 @@ dir_lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-  if (lookup (dir, name, &e, NULL))
+  inode_lock(dir->inode);
+  bool success = lookup (dir, name, &e, NULL);
+  inode_unlock(dir->inode);
+
+  if (success)
     *inode = inode_open (e.inode_sector);
   else
     *inode = NULL;
@@ -170,6 +174,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
     return false;
 
   /* Check that NAME is not in use. */
+  inode_lock(dir->inode);
   if (lookup (dir, name, NULL, NULL))
     goto done;
 
@@ -192,6 +197,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
  done:
+  inode_unlock(dir->inode);
   return success;
 }
 
@@ -209,10 +215,11 @@ dir_remove (struct dir *dir, const char *name)
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-  // we can not allow '.' or '..' to be removed
+  // exclude '.' and '..'
   if(!strcmp(name, ".") || !strcmp(name, "..")) return false;
 
   /* Find directory entry. */
+  inode_lock(dir->inode);
   if (!lookup (dir, name, &e, &ofs))
     goto done;
 
@@ -220,6 +227,23 @@ dir_remove (struct dir *dir, const char *name)
   inode = inode_open (e.inode_sector);
   if (inode == NULL)
     goto done;
+
+  // if it is directory, we need to check inside its empty or is using
+  if (inode_is_dir(inode)){
+    if(inode_open_cnt(inode) > 1) goto done;
+
+    /* Tranvers to be removed dir to see if it is empty;
+      we should not use the same var with orginal implementation to prevent 
+      alias problem */
+    struct dir_entry en;
+    for ( off_t offset = 0;
+          inode_read_at (dir->inode, &en, sizeof en, offset) == sizeof en;
+          offset += sizeof e){
+            // exclude '.' and '..'
+            if(e.in_use && strcmp(en.name,".") && strcmp(en.name,".."))
+              goto done;
+          }
+  }
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -231,6 +255,7 @@ dir_remove (struct dir *dir, const char *name)
   success = true;
 
  done:
+  inode_unlock(dir->inode);
   inode_close (inode);
   return success;
 }
@@ -243,6 +268,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
 
+  inode_lock(dir->inode);
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
@@ -253,6 +279,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
           return true;
         } 
     }
+  inode_unlock(dir->inode);
   return false;
 }
 
