@@ -286,7 +286,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 /* Parse a dir name, return its inode pointer if there is such a dir,
   Return NULL if cannot find.
   */
-static struct inode*
+struct inode*
 dir_path_parse(const char *name, struct dir **ret_dir){
   struct dir *prev_dir = NULL;
   char *last_dir_name = NULL;
