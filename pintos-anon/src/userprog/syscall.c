@@ -327,7 +327,8 @@ _close_ (int fd){
 static bool
 _chdir_ (const char *dir){
   check_ptr_char(dir);
-  
+  if(!strcmp(dir,"/")) thread_current()->cwd = dir_open_root();
+
   struct dir *new_dir = dir_open(dir_path_parse(dir,NULL,NULL));
   if(new_dir == NULL) return false;
 
@@ -339,6 +340,9 @@ _chdir_ (const char *dir){
 static bool
 _mkdir_ (const char *dir){
   check_ptr_char(dir);
+
+  if(!strcmp(dir,"/")) return false;
+
   block_sector_t sector = 0;
   struct dir *prev_dir = NULL;
   char *last_dir_name = NULL;

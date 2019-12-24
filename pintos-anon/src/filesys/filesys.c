@@ -125,11 +125,15 @@ do_format (void)
 
 /* Parse a path, e.g. "/a/b/c" into dir and file. DIR_NAME points to "/a/b",
    FILE_NAME points to "c". FILE_NAME maybe "." or ".." which should be
-   handled when using. Return false if any invalid path is given. */
+   handled when using. Return false if any invalid path is given. 
+   
+   Important: this function will not function properly when inputing "/";
+   need to handle outside this function */
 bool
 filesys_path_parse(const char *name, struct dir **dir_name, char **file_name)
 {
   if(strlen(name) <= 0) return false;
+  ASSERT(strcmp(name,"/"));
 
   char path[strlen(name) + 1];
   memcpy(path, name, strlen(name) + 1);
