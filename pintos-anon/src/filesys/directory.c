@@ -238,7 +238,7 @@ dir_remove (struct dir *dir, const char *name)
       alias problem */
     struct dir_entry en;
     for ( off_t offset = 0;
-          inode_read_at (dir->inode, &en, sizeof en, offset) == sizeof en;
+          inode_read_at (inode, &en, sizeof en, offset) == sizeof en;
           offset += sizeof e){
             // exclude '.' and '..'
             if(e.in_use && strcmp(en.name,".") && strcmp(en.name,".."))
