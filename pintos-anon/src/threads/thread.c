@@ -486,11 +486,13 @@ init_thread (struct thread *t, const char *name, int priority)
   }
 
   /* ============================ project 4 ============================= */
-  if (t == initial_thread){
-    t->cwd = dir_open_root();
+  if (t == initial_thread || t == idle_thread){
+    t->cwd = NULL;
   }else{
     /* inherit parent's current directory */
-    t->cwd = dir_reopen(thread_current()->cwd);
+    if(thread_current()->cwd == NULL)
+      t->cwd = dir_open_root();
+    else dir_reopen(thread_current()->cwd);
   }
 
   old_level = intr_disable ();

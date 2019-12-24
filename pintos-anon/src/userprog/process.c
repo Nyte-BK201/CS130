@@ -317,6 +317,8 @@ process_exit (void)
     file_close(cur->process_exec_file);
   }
 
+  dir_close(cur->cwd);
+
   /* D: destory page allocated */
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
