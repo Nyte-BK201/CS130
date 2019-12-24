@@ -273,6 +273,8 @@ _write_ (int fd, const void *buffer, unsigned size){
   }else{
     struct file *curfile = thread_current()->file_use[fd];
     if(curfile == NULL) _exit_(-1);
+    // cannot write to dir
+    if(inode_is_dir(file_get_inode(curfile))) return -1;
 
     return file_write(curfile, buffer, size);
   }

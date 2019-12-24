@@ -49,6 +49,8 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
+  if(!strcmp(name,"/")) return false;
+
   block_sector_t inode_sector = 0;
   struct dir *dir = NULL;
   char *file_name = NULL;
@@ -73,6 +75,9 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+  // special case since no name at all will make system crash
+  if(!strcmp(name,"/")) return file_open (inode_open(ROOT_DIR_SECTOR));
+
   struct dir *dir = NULL;
   char *file_name = NULL;
   if(!filesys_path_parse(name,&dir,&file_name)) return false;
