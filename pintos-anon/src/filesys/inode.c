@@ -398,7 +398,7 @@ inode_close (struct inode *inode)
       free (inode); 
       lock_release(&open_inodes_lock);
     }else{
-      lock_release(&inode->lock);
+      lock_release(&open_inodes_lock);
     }
 }
 
