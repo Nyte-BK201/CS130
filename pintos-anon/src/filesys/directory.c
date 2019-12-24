@@ -30,17 +30,17 @@ dir_create (block_sector_t sector, block_sector_t parent_sector)
     return false;
 
   /* open new created dir */
-  struct inode* inode = inode_open(sector);
-  struct dir* dir = dir_open(inode);
+  struct dir* dir = dir_open(inode_open(sector));
   if(dir == NULL)return false;
 
   // write to parent inode
-  if(dir_add(dir,".",sector) && dir_add(dir,"..",parent_sector))
+  if(dir_add(dir,".",sector) && dir_add(dir,"..",parent_sector)){
+    dir_close(dir);
     return true;
-  else{
+  }else{
     /* if write fails, remove it in case the following cmd tries to open this
     inode's '.' or '..' which will crash the system */
-    inode_remove(inode);
+    inode_remove(dir_get_inode(dir));
     dir_close(dir);
     return false;
   }
