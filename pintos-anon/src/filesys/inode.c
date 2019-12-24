@@ -50,7 +50,7 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     struct lock lock;                   /* lock to manipulate this inode */
 
-    
+
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     off_t true_length;                  /* sync with read/write race condition*/
     struct inode_disk data;             /* Inode content. */
@@ -382,14 +382,12 @@ inode_close (struct inode *inode)
   if (inode == NULL)
     return;
 
-  lock_acquire(&inode->lock);
+  lock_acquire(&open_inodes_lock);
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
       /* Remove from inode list and release lock. */
-      lock_acquire(&open_inodes_lock);
       list_remove (&inode->elem);
-      lock_release(&open_inodes_lock);
  
       /* Deallocate blocks if removed. */
       if (inode->removed) 
@@ -397,8 +395,8 @@ inode_close (struct inode *inode)
           sector_deallocate(inode);
         }
 
-      lock_release(&inode->lock);
       free (inode); 
+      lock_release(&open_inodes_lock);
     }else{
       lock_release(&inode->lock);
     }
