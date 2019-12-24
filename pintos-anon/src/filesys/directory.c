@@ -292,7 +292,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   Return NULL if cannot find.
   */
 struct inode*
-dir_path_parse(const char *name, struct dir **ret_dir){
+dir_path_parse(const char *name, struct dir **ret_dir, char **dir_name){
   struct dir *prev_dir = NULL;
   char *last_dir_name = NULL;
   struct inode *inode = NULL;
@@ -304,7 +304,10 @@ dir_path_parse(const char *name, struct dir **ret_dir){
     if(ret_dir == NULL) dir_close(prev_dir);
     else *ret_dir = prev_dir;
 
-    free(last_dir_name);
+    // input dir_name NULL means we do not need to keep last_dir_name
+    if(dir_name == NULL) free(last_dir_name);
+    else *dir_name = last_dir_name;
+
     return inode;
   }
 

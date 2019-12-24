@@ -486,7 +486,8 @@ init_thread (struct thread *t, const char *name, int priority)
   }
 
   /* ============================ project 4 ============================= */
-  if (t == initial_thread || t == idle_thread){
+  if (!strcmp(t->name,"main") || !strcmp(t->name,"idle")
+    || !strcmp(t->name,"read_ahead") || !strcmp(t->name,"write_behind")){
     t->cwd = NULL;
   }else{
     /* inherit parent's current directory */

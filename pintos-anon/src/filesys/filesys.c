@@ -96,7 +96,7 @@ filesys_remove (const char *name)
   char *file_name = NULL;
 
   // exclude root
-  if(!strcmp(name,'/')) return false;
+  if(!strcmp(name,"/")) return false;
 
   if(!filesys_path_parse(name,&dir,&file_name)) return false;
 
@@ -124,11 +124,14 @@ do_format (void)
 bool
 filesys_path_parse(const char *name, struct dir **dir_name, char **file_name)
 {
+  if(strlen(name) <= 0) return false;
+
   char path[strlen(name) + 1];
   memcpy(path, name, strlen(name) + 1);
 
   struct dir *dir = NULL;
-  if (path[0]=='/'){
+  /* main thread can be NULL */
+  if (path[0]=='/' || thread_current()->cwd == NULL){
     // absolute path
     dir = dir_open_root();
   }else{

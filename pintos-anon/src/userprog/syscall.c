@@ -326,7 +326,7 @@ static bool
 _chdir_ (const char *dir){
   check_ptr_char(dir);
   
-  struct dir *new_dir = dir_open(dir_path_parse(dir,NULL));
+  struct dir *new_dir = dir_open(dir_path_parse(dir,NULL,NULL));
   if(new_dir == NULL) return false;
 
   dir_close(thread_current()->cwd);
@@ -339,23 +339,32 @@ _mkdir_ (const char *dir){
   check_ptr_char(dir);
   block_sector_t sector = 0;
   struct dir *prev_dir = NULL;
+  char *last_dir_name = NULL;
 
   /* already having a dir with this name */
-  struct inode *inode = dir_path_parse(dir,&prev_dir);
-  if(inode != NULL || prev_dir == NULL){
+  struct inode *inode = dir_path_parse(dir,&prev_dir,&last_dir_name);
+  if(inode != NULL || prev_dir == NULL || last_dir_name == NULL){
     inode_close(inode);
     if(prev_dir != NULL) dir_close(prev_dir);
+    if(last_dir_name != NULL) free(last_dir_name);
     return false;
   }
 
-  if(!free_map_allocate(1,&sector)) return false;
+  if(!free_map_allocate(1,&sector)){
+    free(last_dir_name);
+    return false;
+  }
 
   // create dir
   if( dir_create(sector,inode_get_inumber(dir_get_inode(prev_dir))) ){
+    // add to parent
+    dir_add(prev_dir,last_dir_name,sector);
     dir_close(prev_dir);
+    free(last_dir_name);
     return true;
   }
 
+  free(last_dir_name);
   return false;
 }
 
