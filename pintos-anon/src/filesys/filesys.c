@@ -179,6 +179,8 @@ filesys_path_parse(const char *name, struct dir **dir_name, char **file_name)
     // go into subdirectory
     dir_close(dir);
     dir = dir_open(inode);   
+
+    token = last_token;
   }
 
   *dir_name = dir;
