@@ -239,9 +239,9 @@ dir_remove (struct dir *dir, const char *name)
     struct dir_entry en;
     for ( off_t offset = 0;
           inode_read_at (inode, &en, sizeof en, offset) == sizeof en;
-          offset += sizeof e){
+          offset += sizeof en){
             // exclude '.' and '..'
-            if(e.in_use && strcmp(en.name,".") && strcmp(en.name,".."))
+            if(en.in_use && strcmp(en.name,".") && strcmp(en.name,".."))
               goto done;
           }
   }
