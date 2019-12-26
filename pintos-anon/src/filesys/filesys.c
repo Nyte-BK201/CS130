@@ -139,8 +139,13 @@ filesys_path_parse(const char *name, struct dir **dir_name, char **file_name)
   memcpy(path, name, strlen(name) + 1);
 
   struct dir *dir = NULL;
+
+  char *front = path;
+  /* skip fronting space */
+  while(*front == ' ') front++;
+
   /* main thread can be NULL */
-  if (path[0]=='/' || thread_current()->cwd == NULL){
+  if (*front == '/' || thread_current()->cwd == NULL){
     // absolute path
     dir = dir_open_root();
   }else{
@@ -155,32 +160,26 @@ filesys_path_parse(const char *name, struct dir **dir_name, char **file_name)
   char *save_ptr = NULL;
   char *last_token = NULL;
 
-  // get the last token, maybe "." ".." or filename
-  for(token = strtok_r(path, "/", &save_ptr);
-      token != NULL;
-      token = strtok_r(NULL, "/", &save_ptr)){
-        last_token = token;  
-      }
+  // get dir and last token
+  for(token = strtok_r(front, "/", &save_ptr); ; ){
+    last_token = strtok_r(NULL,"/",&save_ptr);
+    if(last_token == NULL){
+      last_token = token;
+      break;
+    }
 
-  // get dir without last token
-  token = NULL;
-  save_ptr = NULL;
-  for(token = strtok_r(path, "/", &save_ptr);
-      token != NULL && token != last_token;
-      token = strtok_r(NULL, "/", &save_ptr)){
-        
-        struct inode *inode = NULL;
+    struct inode *inode = NULL;
 
-        //lookup the subdirectory and return false if it doesn't exist
-        if (!dir_lookup(dir, token, &inode)) {
-          dir_close(dir);
-          return false;
-        }
+    //lookup the subdirectory and return false if it doesn't exist
+    if (!dir_lookup(dir, token, &inode)) {
+      dir_close(dir);
+      return false;
+    }
 
-        // go into subdirectory
-        dir_close(dir);
-        dir = dir_open(inode);
-      }
+    // go into subdirectory
+    dir_close(dir);
+    dir = dir_open(inode);   
+  }
 
   *dir_name = dir;
 
