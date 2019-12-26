@@ -27,6 +27,12 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* fd entry */
+struct fd_entry{
+  struct file *file;  /* file entry */
+  struct dir *dir;    /* dir entry  */
+};
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -128,12 +134,6 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-
-/* fd entry */
-struct fd_entry{
-  struct file *file;  /* file entry */
-  struct dir *dir;    /* dir entry  */
-};
 
 /* data race inside sturct since it is shared by parent and child;
   be careful, we need to use lock to sync */

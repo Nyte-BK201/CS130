@@ -375,6 +375,8 @@ _mkdir_ (const char *dir){
   }
 
   if(!free_map_allocate(1,&sector)){
+    inode_close(inode);
+    dir_close(prev_dir);
     free(last_dir_name);
     return false;
   }
