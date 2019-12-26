@@ -205,9 +205,14 @@ _open_ (const char *file){
   /* Put the file into the thread */
   /* Find next suitable fd; we don't use 0,1 */
   for(cur->fd_suggest = 2;
-      cur->fd_suggest < 130 && cur->file_use[cur->fd_suggest] != NULL;
+      cur->fd_suggest < 130 && 
+      cur->file_use[cur->fd_suggest].file != NULL ||
+      cur->file_use[cur->fd_suggest].dir != NULL ;
       cur->fd_suggest++);
-  cur->file_use[cur->fd_suggest] = curfile;
+  
+  if(inode_is_dir(file_get_inode(curfile)))
+    cur->file_use[cur->fd_suggest].dir = dir_open(file_get_inode(curfile));
+  else cur->file_use[cur->fd_suggest].file = curfile;
   fd = cur->fd_suggest;
 
   return fd;
@@ -219,7 +224,7 @@ _filesize_ (int fd){
   if(fd < 0 || fd > 129) _exit_(-1);
 
   /* Get the target file */
-  struct file *curfile = thread_current()->file_use[fd];
+  struct file *curfile = thread_current()->file_use[fd].file;
   if(curfile == NULL) _exit_(-1);
 
   /* Calculate the size */
@@ -247,7 +252,7 @@ _read_ (int fd, void *buffer, unsigned size){
       res++;
     }
   }else{
-    struct file *curfile = thread_current()->file_use[fd];
+    struct file *curfile = thread_current()->file_use[fd].file;
     if(curfile == NULL) _exit_(-1);
 
     res = file_read(curfile, buffer, size);
@@ -271,8 +276,10 @@ _write_ (int fd, const void *buffer, unsigned size){
     putbuf(buffer,size);
     return size;
   }else{
-    struct file *curfile = thread_current()->file_use[fd];
+    struct thread *cur = thread_current();
+    struct file *curfile = cur->file_use[fd].file;
     if(curfile == NULL) _exit_(-1);
+    
     // cannot write to dir
     if(inode_is_dir(file_get_inode(curfile))) return -1;
 
@@ -285,8 +292,9 @@ _seek_ (int fd, unsigned position){
   // if(fd == STDOUT_FILENO || fd == STDIN_FILENO) _exit_(-1);
   if(fd < 0 || fd > 129) _exit_(-1);
 
+  struct thread *cur = thread_current();
   /* Get the target file */
-  struct file *curfile = thread_current()->file_use[fd];
+  struct file *curfile = cur->file_use[fd].file;
   if(curfile == NULL) _exit_(-1);
 
   /* seek */
@@ -301,7 +309,7 @@ _tell_ (int fd){
   if(fd < 0 || fd > 129) _exit_(-1);
 
   /* Get the target file */
-  struct file *curfile = thread_current()->file_use[fd];
+  struct file *curfile = thread_current()->file_use[fd].file;
   if(curfile == NULL) _exit_(-1);
 
   return file_tell(curfile);
@@ -315,12 +323,19 @@ _close_ (int fd){
   struct thread *cur = thread_current();
 
   /* Get the target file */
-  struct file *curfile = cur->file_use[fd];
-  if(curfile == NULL) _exit_(-1);
+  struct file *curfile = cur->file_use[fd].file;
+  struct dir *curdir = cur->file_use[fd].dir;
+  if(curfile == NULL && curdir == NULL) _exit_(-1);
 
   /* Close the file and remove from the thread */
-  file_close(curfile);
-  cur->file_use[fd] = NULL;
+  if(curfile != NULL){
+    file_close(curfile);
+    cur->file_use[fd].file = NULL;
+  }else{
+    dir_close(curdir);
+    cur->file_use[fd].dir = NULL;
+  }
+  
 }
 
 /* ============================ project 4 ============================= */
@@ -388,22 +403,16 @@ _readdir_ (int fd, char *name){
   struct thread *cur = thread_current();
 
   /* Get the target file */
-  struct file *curfile = cur->file_use[fd];
-  if(curfile == NULL) _exit_(-1);
-
-  // fd is not a dir
-  struct dir* dir = dir_open(file_get_inode(curfile));
-  if(dir == NULL) return false;
+  struct file *curdir = cur->file_use[fd].dir;
+  if(curdir == NULL) _exit_(-1);
 
   // we already read all entries in dir
-  if(!dir_readdir(dir,ret_name)){
-    dir_close(dir);
+  if(!dir_readdir(curdir,ret_name)){
     return false;
+  }else{
+    memcpy(name,ret_name,strlen(ret_name)+1);
+    return true;
   }
-
-  dir_close(dir);
-  memcpy(name,ret_name,strlen(ret_name)+1);
-  return true;
 }
 
 static bool
@@ -413,11 +422,12 @@ _isdir_ (int fd){
 
   struct thread *cur = thread_current();
 
-  /* Get the target file */
-  struct file *curfile = cur->file_use[fd];
-  if(curfile == NULL) _exit_(-1);
+  struct file *curfile = cur->file_use[fd].file;
+  struct dir *curdir = cur->file_use[fd].dir;
+  if(curfile == NULL && curdir == NULL) _exit_(-1);
 
-  return inode_is_dir(file_get_inode(curfile));
+  /* if curdir is not NULL, return true */
+  return curdir != NULL;
 }
 
 static int
@@ -428,8 +438,10 @@ _inumber_ (int fd){
   struct thread *cur = thread_current();
 
   /* Get the target file */
-  struct file *curfile = cur->file_use[fd];
-  if(curfile == NULL) _exit_(-1);
+  struct file *curfile = cur->file_use[fd].file;
+  struct dir *curdir = cur->file_use[fd].dir;
+  if(curfile == NULL && curdir == NULL) _exit_(-1);
 
-  return inode_get_inumber(file_get_inode(curfile));
+  if(curfile != NULL) return inode_get_inumber(file_get_inode(curfile));
+  else return inode_get_inumber(dir_get_inode(curdir));
 }

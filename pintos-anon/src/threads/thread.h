@@ -104,7 +104,7 @@ struct thread
     /* exit code when a user process terminates */
     int ret;
     /* store files open in this thread; limit to 128, but we don't use 0,1 */
-    struct file *file_use[130];
+    struct fd_entry file_use[130];
     /* a suggested fd, record the smallest spare fd */
     int fd_suggest;
 
@@ -128,6 +128,12 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+/* fd entry */
+struct fd_entry{
+  struct file *file;  /* file entry */
+  struct dir *dir;    /* dir entry  */
+};
 
 /* data race inside sturct since it is shared by parent and child;
   be careful, we need to use lock to sync */
