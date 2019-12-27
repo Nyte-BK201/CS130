@@ -95,7 +95,7 @@ filesys_open (const char *name)
 struct inode *
 filesys_get_inode (const char *name){
   // special case since no name at all will make system crash
-  if(!strcmp(name,"/")) return file_open (inode_open(ROOT_DIR_SECTOR));
+  if(!strcmp(name,"/")) return inode_open(ROOT_DIR_SECTOR);
 
   struct dir *dir = NULL;
   char *file_name = NULL;
