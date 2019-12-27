@@ -194,11 +194,11 @@ _open_ (const char *file){
   int fd;
   struct thread *cur = thread_current();
 
-  /* Open the file as the given name */
-  struct file *curfile = filesys_open(file);
+  /* Open the inode as the given name */
+  struct inode *inode = filesys_get_inode(file);
 
-  /* Check if the file is opened */
-  if (!curfile){
+  /* Check if the inode is opened */
+  if (!inode){
     return -1;
   }
 
@@ -210,9 +210,9 @@ _open_ (const char *file){
       cur->file_use[cur->fd_suggest].dir != NULL ;
       cur->fd_suggest++);
   
-  if(inode_is_dir(file_get_inode(curfile)))
-    cur->file_use[cur->fd_suggest].dir = dir_open(file_get_inode(curfile));
-  else cur->file_use[cur->fd_suggest].file = curfile;
+  if(inode_is_dir(inode))
+    cur->file_use[cur->fd_suggest].dir = dir_open(inode);
+  else cur->file_use[cur->fd_suggest].file = file_open(inode);
   fd = cur->fd_suggest;
 
   return fd;
