@@ -142,7 +142,7 @@ static bool
 sector_allocate_lv1(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
   // check if lv1 sector is allocated, if not allocate one
-  if(head->length < LV0_SIZE){
+  if(head->length <= LV0_SIZE){
     block_sector_t lv1 = sector_allocate_disk();
     head->sectors[LV0_INDEX] = lv1;
     cache_read(lv1,lv1_sector,0,BLOCK_SECTOR_SIZE);
@@ -163,7 +163,7 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   struct inode_disk *lv2_sector = malloc(sizeof(struct inode_disk));
   /* lv1 sector have been allocated, check if lv2 sector is allocated
     If not, allocate a sector */
-  if(head->length < LV0_SIZE+LV1_SIZE){
+  if(head->length <= LV0_SIZE+LV1_SIZE){
     block_sector_t lv2 = sector_allocate_disk();
     head->sectors[LV0_INDEX+LV1_INDEX] = lv2;
     cache_read(lv2,lv2_sector,0,BLOCK_SECTOR_SIZE);
