@@ -1,4 +1,4 @@
-       	 +-------------------------+
+        	 +-------------------------+
 		     | CS 140                  |
 		     | PROJECT 4: FILE SYSTEMS |
 		     | DESIGN DOCUMENT         |
@@ -9,7 +9,7 @@
 >> Fill in the names and email addresses of your group members.
 
 Zhongyue Lin <linzhy@shanghaitech.edu.cn>
-Mengyin Wu <wumy1@shanghaitech.edu.cn>
+Mengying Wu <wumy1@shanghaitech.edu.cn>
 
 ---- PRELIMINARIES ----
 
@@ -99,14 +99,73 @@ Mengyin Wu <wumy1@shanghaitech.edu.cn>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In filesys/cache.h:
+
+struct cache_entry
+{
+    block_sector_t sector;             /* sector number of disk location */
+    uint8_t data[BLOCK_SECTOR_SIZE];   /* data of the sector */
+    bool dirty;                        /* whether it has been modified */
+    bool accessed;                     /* whether it has been accesses recently */
+    struct lock cache_lock;            /* lock for each cache_entry */
+};
+
+/* Use a list to store sectors which are requested to read ahead */
+struct read_ahead_entry {
+    block_sector_t sector;             /* the requested sector id */
+    struct list_elem elem;
+};
+
+In filesys/cache.c:
+
+/* Buffer cache with 64 entries. */
+struct cache_entry* buffer_cache[BUFFER_CACHE_SIZE];
+
+/* A lock for the whole buffer cache. */
+struct lock buffer_cache_lock;
+
+/* Store read_ahead requests with sector id. */
+struct list read_ahead_list;
+
+/* A lock for read_ahead_list. */
+struct lock read_ahead_lock;
+
+/* Condition for read_ahead. */
+struct condition read_ahead_cond;
+
 ---- ALGORITHMS ----
 
 >> C2: Describe how your cache replacement algorithm chooses a cache
 >> block to evict.
 
+We use clock algorithm as my cache replacement algorithm. Circularly
+check the cache_entries in buffer cache, if it has been recently accessed,
+set `accesses' as false, else evict it and break the loop. When evicting, 
+if it has been modified, write back the sector from `data' to disk.
+During the implementation, lock the cache_entry's lock before check its
+status and unlock it before go to the next entry.
+The clock algorithm is used after the buffer cache is full, before that
+just traverse the buffer cache and find a spare id to return.
+
 >> C3: Describe your implementation of write-behind.
 
+When a thread wants to write a sector, it calls cache_write(). Firstly,
+search the sector in buffer cache, if it is not in cache then get an free
+index by cache_evict() and read it into cache, finally get its index in
+buffer cache. Then write the given buffer into cache.
+For write-behind, run a background thread cache_clear_periodic_background(),
+check the whole buffer cache every second, write all modified sectors 
+from cache into disk and mark the cache_entry as not modified.
+
 >> C4: Describe your implementation of read-ahead.
+
+When a thread wants to read ahead a sector, it calls cache_read_ahead().
+It commits a request to read ahead the sector, pushs the sector into 
+read_ahead_list, then signals cache_read_ahead_background() to wake up
+from wait.
+Run a background thread cache_read_ahead_background(), wait condition
+`read_ahead_cond' until read_ahead_list isn't empty, then take out the
+sectors in the list and read them into cache all at once. 
 
 ---- SYNCHRONIZATION ----
 
@@ -114,13 +173,43 @@ Mengyin Wu <wumy1@shanghaitech.edu.cn>
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
 
+I use a lock `buffer_cache_lock' for whole buffer cache. cache_evict()
+is called inside cache_write() and cache_read() after `buffer_cache_lock'
+is locked. When one process is actively reading or writing data in 
+buffer cache, it will hold the lock and other processes cannot even go 
+into cache_evict(). If some process is in cache_evict(), then it must 
+be holding the buffer_cache_lock, which means other processes cannot 
+read or write.
+
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
+
+Besides a lock for whole buffer cache, each block_entry has a lock 
+`cache_lock'. cache_read(), cache_write() and cache_clear() all lock
+`buffer_cache_lock' when they are called and unlock before finish,
+so they are mutual exclusion. Since cache_evict() is called after 
+`buffer_cache_lock' is locked in cache_read() and cache_write(), 
+other processes cannot access the block by these three functions.
+
+Considering cache_search() only refers to the sector index of the 
+cache_entry, it doesn't matters when evicting.
+
+In cache_evict(), lock each cache_entry's `cache_lock' before checking
+and modifying its status, and unlock after it. This prevents other
+process access when evicting.
 
 ---- RATIONALE ----
 
 >> C7: Describe a file workload likely to benefit from buffer caching,
 >> and workloads likely to benefit from read-ahead and write-behind.
+
+A file workload likely to benefit from buffer caching is reading or 
+writing the same sector repeatedly in disk. Workloads likely to benefit
+from read-ahead is reading a file sequentially, it may promise half
+content to be in cache ahead of time and operates more efficiently. 
+Workloads likely to benefit from write-behind is writing the same sector
+frequently to disk, by write-behind it only need write once to block
+which save a lot of time and not hinder synchronization.
 
 			   SURVEY QUESTIONS
 			   ================
