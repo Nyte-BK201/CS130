@@ -90,6 +90,25 @@ filesys_open (const char *name)
   return file_open (inode);
 }
 
+/* Open inode with the given NAME
+  return inode to this file */
+struct inode *
+filesys_get_inode (const char *name){
+  // special case since no name at all will make system crash
+  if(!strcmp(name,"/")) return inode_open(ROOT_DIR_SECTOR);
+
+  struct dir *dir = NULL;
+  char *file_name = NULL;
+  if(!filesys_path_parse(name,&dir,&file_name)) return false;
+  struct inode *inode = NULL;
+
+  if (dir != NULL)
+    dir_lookup (dir, file_name, &inode);
+  dir_close (dir);
+  free(file_name);
+  return inode;
+}
+
 /* Deletes the file named NAME.
    Returns true if successful, false on failure.
    Fails if no file named NAME exists,
