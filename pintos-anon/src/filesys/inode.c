@@ -142,7 +142,7 @@ static bool
 sector_allocate_lv1(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
   // check if lv1 sector is allocated, if not allocate one
-  if(head->length <= LV0_SIZE){
+  if(head->sectors[LV0_INDEX] == 0){
     block_sector_t lv1 = sector_allocate_disk();
     head->sectors[LV0_INDEX] = lv1;
     cache_read(lv1,lv1_sector,0,BLOCK_SECTOR_SIZE);
@@ -233,16 +233,18 @@ sector_allocate(struct inode_disk *head, off_t length){
     head->length += length;
     return true;
   }else{
+    off_t left_length = length - (block_end - head->length);
+    head->length += block_end - head->length;
     // not fit, allocate new sectors
-    while(length>0){
+    while(left_length>0){
       if(!sector_allocate_one(head))return false;
 
-      if(length > BLOCK_SECTOR_SIZE){
+      if(left_length > BLOCK_SECTOR_SIZE){
         head->length += BLOCK_SECTOR_SIZE;
-        length -= BLOCK_SECTOR_SIZE;
+        left_length -= BLOCK_SECTOR_SIZE;
       }else{
-        head->length += length;
-        length = 0;
+        head->length += left_length;
+        left_length = 0;
       }
       
     }
@@ -495,13 +497,10 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       block_sector_t sector_idx = byte_to_sector (inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
-      /* Bytes left in inode, bytes left in sector, lesser of the two. */
-      off_t inode_left = inode_length (inode) - offset;
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
-      int min_left = inode_left < sector_left ? inode_left : sector_left;
 
       /* Number of bytes to actually write into this sector. */
-      int chunk_size = size < min_left ? size : min_left;
+      int chunk_size = size < sector_left ? size : sector_left;
       if (chunk_size <= 0)
         break;
 
