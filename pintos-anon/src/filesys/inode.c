@@ -163,7 +163,7 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   struct inode_disk *lv2_sector = malloc(sizeof(struct inode_disk));
   /* lv1 sector have been allocated, check if lv2 sector is allocated
     If not, allocate a sector */
-  if(head->length <= LV0_SIZE+LV1_SIZE){
+  if(head->sectors[LV0_INDEX+LV1_INDEX] == 0){
     block_sector_t lv2 = sector_allocate_disk();
     head->sectors[LV0_INDEX+LV1_INDEX] = lv2;
     cache_read(lv2,lv2_sector,0,BLOCK_SECTOR_SIZE);
@@ -173,9 +173,8 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
 
   struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
   // check if desired lv1 sector of lv2 is allocated */
-  off_t ori_sec_num = (head->length-LV0_SIZE-LV1_SIZE-1)/LV1_SIZE;
   off_t new_sec_num = pos/LV1_SIZE;
-  if(ori_sec_num < new_sec_num){
+  if(lv2_sector->sectors[new_sec_num] == 0){
     block_sector_t lv1 = sector_allocate_disk();
     lv2_sector->sectors[new_sec_num] = lv1;
     cache_write(head->sectors[LV0_INDEX+LV1_INDEX],lv2_sector,0,BLOCK_SECTOR_SIZE);
@@ -187,6 +186,7 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   // add new_sec to proper place
   sector_allocate_lv0(lv1_sector,new_sec,pos);
   cache_write(lv2_sector->sectors[new_sec_num],lv1_sector,0,BLOCK_SECTOR_SIZE);
+  // page fault here, but before 2nd LV1 of LV2, functions perfectly
   free(lv2_sector);
   free(lv1_sector);
   return true;
