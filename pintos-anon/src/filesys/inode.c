@@ -184,6 +184,7 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   }
 
   // add new_sec to proper place
+  pos -= (pos/LV1_SIZE)*LV1_SIZE;
   sector_allocate_lv0(lv1_sector,new_sec,pos);
   cache_write(lv2_sector->sectors[new_sec_num],lv1_sector,0,BLOCK_SECTOR_SIZE);
   // page fault here, but before 2nd LV1 of LV2, functions perfectly
