@@ -488,6 +488,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   lock_acquire(&inode->lock);
   if(inode_length(inode)<size+offset){
     if(!sector_allocate(&inode->data,size+offset-inode_length(inode))){
+      lock_release(&inode->lock);
       return 0;
     }
     cache_write(inode->sector,&inode->data,0,BLOCK_SECTOR_SIZE);
