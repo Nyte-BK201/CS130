@@ -118,8 +118,10 @@ inode_init (void)
 static block_sector_t
 sector_allocate_disk(){
   block_sector_t new_sec;
+  if(!free_map_allocate(1,&new_sec))return -1;
   char *sec_fill = malloc(BLOCK_SECTOR_SIZE);
-  if(!free_map_allocate(1,&new_sec) || sec_fill==NULL) return -1;
+  if(sec_fill == NULL) return -1;
+
   memset(sec_fill,0,BLOCK_SECTOR_SIZE);
 
   cache_write(new_sec,sec_fill,0,BLOCK_SECTOR_SIZE);
@@ -144,6 +146,7 @@ sector_allocate_lv1(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   // check if lv1 sector is allocated, if not allocate one
   if(head->sectors[LV0_INDEX] == 0){
     block_sector_t lv1 = sector_allocate_disk();
+    if(lv1 == -1) return false;
     head->sectors[LV0_INDEX] = lv1;
     cache_read(lv1,lv1_sector,0,BLOCK_SECTOR_SIZE);
   }else{
@@ -165,6 +168,7 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
     If not, allocate a sector */
   if(head->sectors[LV0_INDEX+LV1_INDEX] == 0){
     block_sector_t lv2 = sector_allocate_disk();
+    if(lv2 == -1) return false;
     head->sectors[LV0_INDEX+LV1_INDEX] = lv2;
     cache_read(lv2,lv2_sector,0,BLOCK_SECTOR_SIZE);
   }else{
@@ -176,6 +180,7 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
   off_t new_sec_num = pos/LV1_SIZE;
   if(lv2_sector->sectors[new_sec_num] == 0){
     block_sector_t lv1 = sector_allocate_disk();
+    if(lv1 == -1) return false;
     lv2_sector->sectors[new_sec_num] = lv1;
     cache_write(head->sectors[LV0_INDEX+LV1_INDEX],lv2_sector,0,BLOCK_SECTOR_SIZE);
     cache_read(lv1,lv1_sector,0,BLOCK_SECTOR_SIZE);
