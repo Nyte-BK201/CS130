@@ -29,13 +29,47 @@ Mengying Wu <wumy1@shanghaitech.edu.cn>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+filesys/inode.c:
+/* On-disk inode.
+   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+struct inode_disk
+  {
+    block_sector_t sectors[125];        /* Lv0 0~122, lv1 123, lv2 124 */
+    uint32_t isdir;                     /* 0 file, 1 dir */
+    off_t length;                       /* File size in bytes. */
+    unsigned magic;                     /* Magic number. */
+  };
+
+/* In-memory inode. */
+struct inode 
+  {
+    struct list_elem elem;              /* Element in inode list. */
+    block_sector_t sector;              /* Sector number of disk location. */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    struct lock lock;                   /* lock to manipulate this inode */
+
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    off_t true_length;                  /* sync with read/write race condition*/
+    struct inode_disk data;             /* Inode content. */
+  };
+
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
+
+inode itself contains 123 LV0 sectors, 123*512 bytes
+LV1 contains 128 LV0 sectors, 128*512 bytes
+LV2 contains 128 LV1 sectors, 128*128*512 bytes
+Total 8,517,120 bytes, which is roughtly 8.12MB
 
 ---- SYNCHRONIZATION ----
 
 >> A3: Explain how your code avoids a race if two processes attempt to
 >> extend a file at the same time.
+
+When a process tries to extend a file, it will first execute 
+lock_acquire(&inode->lock). So multi-processes will compete to acquire the lock
+and only one process can extend it at one time.
 
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
@@ -44,12 +78,27 @@ Mengying Wu <wumy1@shanghaitech.edu.cn>
 >> nonzero data, A is not allowed to see all zeros.  Explain how your
 >> code avoids this race.
 
+Our implementation limits the reading that only after the whole writing to a 
+file finishs, reading process will be allowed to get the data. Otherwise, 
+return zero bytes read.
+In details, inode->true_length records the length of none-zero data(which has
+been written by B). It is updated after whole writing finishs. inode_read_at()
+will check true_length at the very beginning to see if there is none-zero data
+to read. And no lock is required to inode_read_at().
+
 >> A5: Explain how your synchronization design provides "fairness".
 >> File access is "fair" if readers cannot indefinitely block writers
 >> or vice versa.  That is, many processes reading from a file cannot
 >> prevent forever another process from writing the file, and many
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
+
+Readers will not require any synchronizations since our design let 
+writers to coordinate. Extending a file requires inode->lock, and writers to 
+the same file exclusively extend it. Besides extension, no synchronization is 
+required, so the concurrency and fairness are both guaranteed.
+Also the implementation is stable to the condition of competing writing/reading
+that only finished data can be fetched.
 
 ---- RATIONALE ----
 
@@ -58,6 +107,12 @@ Mengying Wu <wumy1@shanghaitech.edu.cn>
 >> indirect blocks?  If not, why did you choose an alternative inode
 >> structure, and what advantages and disadvantages does your
 >> structure have, compared to a multilevel index?
+
+Yes. A doubly indirect block will meet the requirement of 8MB file size. So, 
+we focus on small files which are most parts of a disk. Total 123 direct blocks
+counts up to 62,976 bytes is a good number to contain small files which will
+reduce the IO time to disk. Also one indirect blocks contains 65,536 bytes, 
+which sum up to 128,512 bytes, roughtly 0.12MB for a middle sized file.
 
 			    SUBDIRECTORIES
 			    ==============
@@ -68,10 +123,33 @@ Mengying Wu <wumy1@shanghaitech.edu.cn>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+threads/thread.h: 
+struct thread{
+	...
+	struct dir *cwd;                    /* current directory */
+	...
+};
+
+/* fd entry */
+struct fd_entry{
+  struct file *file;  /* file entry */
+  struct dir *dir;    /* dir entry  */
+};
+
 ---- ALGORITHMS ----
 
 >> B2: Describe your code for traversing a user-specified path.  How
 >> do traversals of absolute and relative paths differ?
+
+Our parsing routine states as:
+1. Remove front space and check the very first character, if it is "/", open 
+	root dir, otherwise, open thread_current()->cwd as base dir.
+2. Filtering "/" character by strtok_r(). Lookup the token in base dir, if
+	current token is found, replace previous base dir by new one.
+3. Loop until we are holding the last token. We do not need to search for last
+	token and we just save it and return.
+One special reminder is that, due to the feature of strtok_r(), the parser can 
+not handle "/" so it has to be handled outside the parser as a special case.
 
 ---- SYNCHRONIZATION ----
 
@@ -80,15 +158,35 @@ Mengying Wu <wumy1@shanghaitech.edu.cn>
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
 
+Add & remove a directory will require the process to hold the inode->lock.
+We limits every lookup/add/remove directory action by inode_lock()/ 
+inode_unlock() to maintain only one process can manipulates a base dir such as
+adding a new file/dir to base dir, removing a file/dir in the base dir or even 
+lookup a file/dir in the base dir. 
+Every action which affects other process will have to obtain the base dir's 
+inode->lock. 
+
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current
 >> working directory?  If so, what happens to that process's future
 >> file system operations?  If not, how do you prevent it?
 
+No. Our implementation checks the directory to be removed to ensure there is no
+file or dir inside except "." and "..". Any remove syscall to a none-empty dir 
+will fail.
+Also, the directory's inode is checked whether there is any other opening by 
+seeing the inode->open_cnt. If it is in use as a process's cwd or opened by 
+other process, its open_cnt must be larger than 1 since cwd is a opening dir.
+
 ---- RATIONALE ----
 
 >> B6: Explain why you chose to represent the current directory of a
 >> process the way you did.
+
+In pintos, every process only has one thread, so keeping cwd in struct thread 
+is keeping it in process. The design here maintains both uniqueness and 
+inheritance of cwd. We can easily inherit a cwd when executing a child process
+and use a process itself's cwd without any searching.
 
 			     BUFFER CACHE
 			     ============
