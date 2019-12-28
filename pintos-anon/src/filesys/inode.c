@@ -21,7 +21,8 @@
   */
 static int32_t LV0_SIZE = (LV0_INDEX * BLOCK_SECTOR_SIZE);
 static int32_t LV1_SIZE = ((BLOCK_SECTOR_SIZE / 4) * BLOCK_SECTOR_SIZE);
-static int32_t LV2_SIZE = ((BLOCK_SECTOR_SIZE / 4) * (BLOCK_SECTOR_SIZE / 4) * BLOCK_SECTOR_SIZE); 
+static int32_t LV2_SIZE = ((BLOCK_SECTOR_SIZE / 4) * (BLOCK_SECTOR_SIZE / 4) *
+                          BLOCK_SECTOR_SIZE); 
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
@@ -90,8 +91,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
   // level 2: read level2 and relocate level 1 block then translate
   if(pos<LV2_SIZE){
     struct inode_disk *inode_disk = malloc(sizeof(struct inode_disk));
-    cache_read(inode->data.sectors[LV0_INDEX+LV1_INDEX],inode_disk,0,BLOCK_SECTOR_SIZE);
-    cache_read(inode_disk->sectors[pos/LV1_SIZE],inode_disk,0,BLOCK_SECTOR_SIZE);
+    cache_read(inode->data.sectors[LV0_INDEX+LV1_INDEX],
+                inode_disk,0,BLOCK_SECTOR_SIZE);
+    cache_read(inode_disk->sectors[pos/LV1_SIZE],
+                inode_disk,0,BLOCK_SECTOR_SIZE);
     pos-=(pos/LV1_SIZE)*LV1_SIZE;
     block_sector_t ans = lv0_translate(inode_disk,pos);
     free(inode_disk);
@@ -132,7 +135,8 @@ sector_allocate_disk(){
 /* add new_sec to lv0
   */
 static bool
-sector_allocate_lv0(struct inode_disk *inode_disk, block_sector_t new_sec, off_t pos){
+sector_allocate_lv0(struct inode_disk *inode_disk,
+                     block_sector_t new_sec, off_t pos){
   // -1 for moving 512th byte to sector[0]
   inode_disk->sectors[pos/BLOCK_SECTOR_SIZE] = new_sec;
   return true;
@@ -141,7 +145,8 @@ sector_allocate_lv0(struct inode_disk *inode_disk, block_sector_t new_sec, off_t
 /* add new_sec to head's lv1
   */
 static bool
-sector_allocate_lv1(struct inode_disk *head, block_sector_t new_sec, off_t pos){
+sector_allocate_lv1(struct inode_disk *head, 
+                    block_sector_t new_sec, off_t pos){
   struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
   // check if lv1 sector is allocated, if not allocate one
   if(head->sectors[LV0_INDEX] == 0){
@@ -162,7 +167,8 @@ sector_allocate_lv1(struct inode_disk *head, block_sector_t new_sec, off_t pos){
 /* add a new sector to head's lv2
   */
 static bool
-sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
+sector_allocate_lv2(struct inode_disk *head, 
+                    block_sector_t new_sec, off_t pos){
   struct inode_disk *lv2_sector = malloc(sizeof(struct inode_disk));
   /* lv1 sector have been allocated, check if lv2 sector is allocated
     If not, allocate a sector */
@@ -172,7 +178,8 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
     head->sectors[LV0_INDEX+LV1_INDEX] = lv2;
     cache_read(lv2,lv2_sector,0,BLOCK_SECTOR_SIZE);
   }else{
-    cache_read(head->sectors[LV0_INDEX+LV1_INDEX],lv2_sector,0,BLOCK_SECTOR_SIZE);
+    cache_read(head->sectors[LV0_INDEX+LV1_INDEX],
+                lv2_sector,0,BLOCK_SECTOR_SIZE);
   }
 
   struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
@@ -182,7 +189,8 @@ sector_allocate_lv2(struct inode_disk *head, block_sector_t new_sec, off_t pos){
     block_sector_t lv1 = sector_allocate_disk();
     if(lv1 == -1) return false;
     lv2_sector->sectors[new_sec_num] = lv1;
-    cache_write(head->sectors[LV0_INDEX+LV1_INDEX],lv2_sector,0,BLOCK_SECTOR_SIZE);
+    cache_write(head->sectors[LV0_INDEX+LV1_INDEX],
+                lv2_sector,0,BLOCK_SECTOR_SIZE);
     cache_read(lv1,lv1_sector,0,BLOCK_SECTOR_SIZE);
   }else{
     cache_read(lv2_sector->sectors[new_sec_num],lv1_sector,0,BLOCK_SECTOR_SIZE);
@@ -368,7 +376,8 @@ sector_deallocate(struct inode *inode){
   // release lv1 sectors inside lv2 if exsits
   if(len >= LV0_SIZE+LV1_SIZE){
     struct inode_disk *lv1_sector = malloc(sizeof(struct inode_disk));
-    cache_read(inode->data.sectors[LV0_INDEX+LV1_INDEX],lv1_sector,0,BLOCK_SECTOR_SIZE);
+    cache_read(inode->data.sectors[LV0_INDEX+LV1_INDEX],
+                lv1_sector,0,BLOCK_SECTOR_SIZE);
     for(int i=0;i<(len-LV0_SIZE-LV1_SIZE)/LV1_SIZE;i++)
       free_map_release(lv1_sector->sectors[i],1);
 
@@ -521,7 +530,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
   // if(write_read_sync) lock_release(&inode->lock);
 
-  // indicate reading thread that writing finished, read will not recv all zeros
+  // indicate reading thread that writing finished, prevent reading zeros
   inode->true_length = inode->data.length;
 
   return bytes_written;

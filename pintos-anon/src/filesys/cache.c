@@ -31,8 +31,10 @@ cache_init()
         lock_init(&buffer_cache[i]->cache_lock);
     }
 
-    thread_create("write_behind", PRI_DEFAULT, cache_clear_periodic_background, NULL);
-    thread_create("read_ahead", PRI_DEFAULT, cache_read_ahead_background, NULL);
+    thread_create("write_behind", PRI_DEFAULT, 
+                    cache_clear_periodic_background, NULL);
+    thread_create("read_ahead", PRI_DEFAULT, 
+                    cache_read_ahead_background, NULL);
 }
 
 /* Read a whole sector from disk to memory. Search it in buffer
@@ -103,7 +105,8 @@ cache_clear()
     for (int i = 0; i < BUFFER_CACHE_SIZE; i++){
         if (buffer_cache[i]->dirty == true){
             buffer_cache[i]->dirty = false;
-            block_write(fs_device, buffer_cache[i]->sector,buffer_cache[i]->data);
+            block_write(fs_device, buffer_cache[i]->sector,
+                        buffer_cache[i]->data);
         }
         // buffer_cache[i]->accessed = false;
     }
@@ -138,7 +141,8 @@ cache_evict()
 
     for (int j = 0; j < BUFFER_CACHE_SIZE; ++j)
     {
-        if (buffer_cache[j]->sector == -1 && buffer_cache[i]->accessed == false)
+        if (buffer_cache[j]->sector == -1 && 
+            buffer_cache[i]->accessed == false)
             return j;
     }
     // clock algorithm
@@ -149,7 +153,8 @@ cache_evict()
             lock_release(&buffer_cache[i]->cache_lock);
         }else{
             if (buffer_cache[i]->dirty){
-                block_write(fs_device,buffer_cache[i]->sector,buffer_cache[i]->data);
+                block_write(fs_device,buffer_cache[i]->sector,
+                            buffer_cache[i]->data);
             }
             lock_release(&buffer_cache[i]->cache_lock);
 
@@ -206,7 +211,8 @@ cache_read_ahead_background(void *aux UNUSED)
 
         // get the sector id
         struct list_elem *e = list_pop_front(&read_ahead_list);
-        struct read_ahead_entry *rae = list_entry(e, struct read_ahead_entry, elem);
+        struct read_ahead_entry *rae = list_entry(e, struct 
+                                                    read_ahead_entry, elem);
         lock_release(&read_ahead_lock);
 
         // read the sector into cache, buffer doesn't need here.
